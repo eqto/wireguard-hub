@@ -24,7 +24,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		return models.WGStatus{}, err
 	}
 
-	stdout, stderr, err := client.Exec("wg show all dump")
+	stdout, stderr, err := client.Exec("sudo wg show all dump")
 	if err != nil {
 		return models.WGStatus{}, fmt.Errorf("failed to get wg status: %s: %w", stderr, err)
 	}

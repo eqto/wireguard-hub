@@ -87,6 +87,13 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 	}
 	defer session.Close()
 
+	// Request a PTY so sudo (and other programs) can run without a real TTY.
+	// sudo refuses to execute without one ("no tty present and no askpass
+	// program specified"). A PTY also lets sudo use cached credentials.
+	if err := session.RequestPty("xterm", 80, 200, ssh.TerminalModes{}); err != nil {
+		return "", "", fmt.Errorf("failed to request pty: %w", err)
+	}
+
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
 	session.Stderr = &stderr
