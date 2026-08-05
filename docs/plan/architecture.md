@@ -163,6 +163,51 @@ type WGPeer struct {
 6. Returns structured `WGStatus` to frontend
 7. Session stays cached for subsequent operations
 
+## Distro Abstraction
+
+WireGuard operations differ across Linux distributions — package managers, init systems, and privilege escalation methods vary. The app uses a **strategy pattern** to abstract these differences behind a `Distro` interface.
+
+### Interface (`internal/wireguard/distro.go`)
+
+```go
+type Distro interface {
+    ID() string
+    DisplayName() string
+    InstallWireGuard() string
+    StartInterface(name string) string
+    StopInterface(name string) string
+    EnableInterface(name string) string
+    DisableInterface(name string) string
+    WriteConfig(name, content string) string
+    ReadConfig(name string) string
+    RemoveConfig(name string) string
+    SyncConfig(name string) string
+}
+```
+
+### Concrete Implementations (`internal/wireguard/distros/`)
+
+Two shared base structs handle the common patterns:
+
+- **`systemdDistro`** — shared by Ubuntu, Fedora, openSUSE (systemctl + sudo + `/etc/wireguard/`)
+- **`openrcDistro`** — shared by Alpine (rc-service + no sudo + `/etc/wireguard/`)
+
+Each distro embeds the appropriate base and overrides `InstallWireGuard()` with its package manager command. Future distros using the same init system can reuse these bases.
+
+### Auto-Detection (`internal/wireguard/detect.go`)
+
+- Runs `cat /etc/os-release` over SSH on first connection
+- Parses `ID=` and `ID_LIKE=` fields
+- Maps to the closest supported distro
+- Falls back to a generic systemd distro if unknown
+- Result is cached for the session
+
+### Manual Override
+
+The `ServerConfig.DistroID` field allows manual selection. If set, auto-detection is skipped. The frontend exposes this as a dropdown in the Add/Edit Server modal.
+
+For the full list of supported distros and their specific commands, see [supported-distros.md](../supported-distros.md).
+
 ## WireGuard CLI Commands Used
 
 - `wg show all dump` — get full status
@@ -173,3 +218,5 @@ type WGPeer struct {
 - `wg syncconf <iface> <(wg-quick strip <iface>)` — sync config without restart
 - `wg-quick up/down <iface>` — bring interface up/down
 - `cat /etc/wireguard/<iface>.conf` — read config file
+
+Note: The exact commands (including privilege escalation prefix and service management) are determined by the active `Distro` implementation. The commands above are the base WireGuard operations; the distro layer wraps them with the appropriate `sudo`/root prefix and service manager calls.

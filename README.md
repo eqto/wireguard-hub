@@ -1,59 +1,112 @@
-# Welcome to Your New Wails3 Project!
+# WireGuard Admin
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+A cross-platform desktop application to manage multiple WireGuard VPN servers over SSH. Built with Wails 3 (Go + Svelte 5), it provides a full graphical interface for WireGuard interface lifecycle, peer management, and live status monitoring — no agent required on the server.
+
+## Features
+
+- **Multi-server management** — Add, edit, and delete SSH server profiles with password or private key authentication
+- **Full interface lifecycle** — Create and delete WireGuard interfaces with automatic key generation and `wg-quick` bring-up
+- **Peer management** — Add and remove peers with auto-generated keypairs, preshared keys, allowed IPs, endpoints, and persistent keepalive
+- **Live status** — View interface and peer stats including latest handshake, transfer (RX/TX bytes), and endpoints
+- **Config viewer** — Read WireGuard config files directly from the server
+- **Distro-aware operations** — Automatically detects the server's Linux distribution and uses the correct package manager, service manager, and privilege escalation method
+- **Install WireGuard** — One-click install of WireGuard on servers that don't have it yet
+- **Jump server support** — Connect to servers through a bastion/jump host
+- **Dark/light theme** — Toggle between dark and light UI themes
+
+## Supported Linux Distributions
+
+| Distro | Family | Package Manager | Init System | Privilege |
+|--------|--------|----------------|-------------|-----------|
+| Ubuntu | Debian | `apt` | systemd | `sudo` |
+| Debian | Debian | `apt` | systemd | `sudo` |
+| Fedora | RHEL | `dnf` | systemd | `sudo` |
+| RHEL / Rocky / AlmaLinux | RHEL | `dnf`/`yum` | systemd | `sudo` |
+| openSUSE | SUSE | `zypper` | systemd | `sudo` |
+| Alpine | Alpine | `apk` | OpenRC | root |
+
+The app auto-detects the distro on first connection via `/etc/os-release`. You can also manually select the distro when adding a server. See [docs/supported-distros.md](docs/supported-distros.md) for details.
+
+## Prerequisites
+
+- [Wails 3 CLI](https://v3.wails.io/) installed
+- Go 1.21+
+- Node.js 18+
+- Linux: GTK4 + `webkitgtk-6.0` development headers
+- WireGuard installed on target servers (or use the in-app install button)
 
 ## Getting Started
 
-1. Navigate to your project directory in the terminal.
+### Development
 
-2. To run your application in development mode, use the following command:
+```bash
+CGO_ENABLED=1 wails3 dev
+```
 
-   ```
-   wails3 dev
-   ```
+This starts the app with hot-reloading for both frontend and backend.
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+### Build
 
-3. To build your application for production, use:
+```bash
+CGO_ENABLED=1 wails3 build
+```
 
-   ```
-   wails3 build
-   ```
+The production binary is output to the `build/` directory.
 
-   This will create a production-ready executable in the `build` directory.
+## Configuration
 
-## Exploring Wails3 Features
+Server profiles are stored as YAML at:
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+```
+~/.config/wireguard-admin/servers.yaml
+```
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+Each profile includes: name, host, port, username, auth method (password/key), optional passphrase, jump server reference, and optional distro override.
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+## Architecture
 
-   ```
-   go run .
-   ```
+```
+WireguardAdmin/
+├── main.go                          # Entry point, Wails app + service registration
+├── internal/
+│   ├── models/models.go             # Data structures (ServerConfig, WGInterface, WGPeer, etc.)
+│   ├── config/store.go              # YAML config load/save (~/.config/wireguard-admin/)
+│   ├── ssh/client.go                # SSH connection manager (password/key auth, jump server)
+│   ├── server/service.go            # ServerService — CRUD for server profiles, SSH session pooling
+│   └── wireguard/
+│       ├── service.go               # WireGuardService — WG operations via SSH
+│       ├── distro.go                # Distro interface (strategy pattern)
+│       ├── detect.go                # Auto-detection via /etc/os-release
+│       └── distros/                 # Concrete distro implementations
+│           ├── common.go            # Shared systemd + OpenRC base structs
+│           ├── ubuntu.go            # Ubuntu/Debian
+│           ├── fedora.go            # Fedora/RHEL
+│           ├── opensuse.go          # openSUSE
+│           └── alpine.go            # Alpine (OpenRC)
+├── frontend/
+│   ├── src/
+│   │   ├── App.svelte               # Root layout: sidebar + main panel
+│   │   ├── main.ts                  # App bootstrap
+│   │   └── lib/
+│   │       ├── components/          # UI components (Sidebar, Dashboard, modals, etc.)
+│   │       ├── stores/servers.ts    # Svelte store wrapping Wails bindings
+│   │       └── utils.ts             # Helpers
+│   └── ...
+├── docs/
+│   ├── plan/architecture.md         # Architecture overview
+│   └── supported-distros.md         # Distro support reference
+└── build/                           # Build output
+```
 
-   Note: Some examples may be under development during the alpha phase.
+### Tech Stack
 
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
+- **Wails 3** — Desktop app framework (Go backend + webview frontend)
+- **Svelte 5 + TypeScript + Vite** — Frontend
+- **TailwindCSS** — Styling
+- **shadcn-svelte** — UI components
+- **lucide-svelte** — Icons
+- **golang.org/x/crypto/ssh** — SSH client
+- **adrg/xdg** — Cross-platform config paths
+- **gopkg.in/yaml.v3** — YAML config encoding
 
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+For the full architecture document, see [docs/plan/architecture.md](docs/plan/architecture.md).
