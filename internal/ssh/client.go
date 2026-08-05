@@ -3,6 +3,7 @@ package ssh
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"time"
 
 	"wireguardadmin/internal/models"
@@ -11,7 +12,8 @@ import (
 )
 
 type Client struct {
-	client *ssh.Client
+	client       *ssh.Client
+	sudoPassword string
 }
 
 func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
@@ -32,7 +34,7 @@ func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
 			return nil, fmt.Errorf("failed to handshake with %s via jump server: %w", addr, err)
 		}
 
-		return &Client{client: ssh.NewClient(nconn, chans, reqs)}, nil
+		return &Client{client: ssh.NewClient(nconn, chans, reqs), sudoPassword: server.Password}, nil
 	}
 
 	conn, err := ssh.Dial("tcp", addr, config)
@@ -40,7 +42,7 @@ func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to %s: %w", addr, err)
 	}
 
-	return &Client{client: conn}, nil
+	return &Client{client: conn, sudoPassword: server.Password}, nil
 }
 
 func buildClientConfig(server models.ServerConfig) (*ssh.ClientConfig, string, error) {
@@ -87,21 +89,25 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 	}
 	defer session.Close()
 
-	// Request a PTY so sudo (and other programs) can run without a real TTY.
-	// sudo refuses to execute without one ("no tty present and no askpass
-	// program specified"). A PTY also lets sudo use cached credentials.
-	if err := session.RequestPty("xterm", 80, 200, ssh.TerminalModes{}); err != nil {
-		return "", "", fmt.Errorf("failed to request pty: %w", err)
+	// If a sudo password is configured and the command uses sudo, switch to
+	// `sudo -S` so the password is read from stdin. Prepend the password to
+	// any existing input. Use `-p ''` to suppress the password prompt so it
+	// doesn't pollute stdout/stderr.
+	finalCmd := cmd
+	finalInput := input
+	if c.sudoPassword != "" && strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
+		finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
+		finalInput = c.sudoPassword + "\n" + input
 	}
 
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
 	session.Stderr = &stderr
-	if input != "" {
-		session.Stdin = bytes.NewBufferString(input)
+	if finalInput != "" {
+		session.Stdin = bytes.NewBufferString(finalInput)
 	}
 
-	err = session.Run(cmd)
+	err = session.Run(finalCmd)
 	return stdout.String(), stderr.String(), err
 }
 
@@ -136,6 +142,30 @@ func TestConnection(server models.ServerConfig, jump *Client) (*models.TestConne
 			Success: true,
 			Message: "SSH connected, but WireGuard may not be installed: " + stdout,
 		}, nil
+	}
+
+	// Check sudo capability.
+	uidOut, _, _ := client.Exec("id -u")
+	isRoot := strings.TrimSpace(uidOut) == "0"
+
+	if !isRoot {
+		if client.sudoPassword != "" {
+			_, stderr, err := client.Exec("sudo -S true")
+			if err != nil {
+				return &models.TestConnectionResult{
+					Success: false,
+					Message: "SSH connected, but sudo authentication failed: " + strings.TrimSpace(stderr),
+				}, nil
+			}
+		} else {
+			_, _, err := client.Exec("sudo -n true")
+			if err != nil {
+				return &models.TestConnectionResult{
+					Success: false,
+					Message: "SSH connected, but the user does not have passwordless sudo. Use password authentication or configure NOPASSWD on the server.",
+				}, nil
+			}
+		}
 	}
 
 	return &models.TestConnectionResult{

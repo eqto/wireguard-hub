@@ -46,11 +46,11 @@ func parseWGDump(output string) models.WGStatus {
 
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		if len(fields) < 8 {
-			continue
-		}
 
-		if len(fields) == 8 {
+		// Interface line: interface, private-key, public-key, listen-port, fwmark (5 fields).
+		// Peer line: interface, public-key, preshared-key, endpoint, allowed-ips,
+		//            latest-handshake, transfer-rx, transfer-tx, persistent-keepalive (9 fields).
+		if len(fields) <= 5 {
 			ifaceName := fields[0]
 			if _, ok := ifaceMap[ifaceName]; !ok {
 				ifaceMap[ifaceName] = &models.WGInterface{
