@@ -9,6 +9,7 @@ export interface ServerState {
   port: number
   username: string
   authMethod: string
+  viaServerId?: string
   status: ServerStatus
 }
 

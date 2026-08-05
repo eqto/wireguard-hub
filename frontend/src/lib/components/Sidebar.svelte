@@ -22,6 +22,12 @@
   let serverList = $derived($servers);
   let selected = $derived($selectedServerId);
   let isLoading = $derived($loading);
+
+  function jumpName(viaId: string, list: any[]): string {
+    if (!viaId) return "";
+    const j = list.find((s) => s.id === viaId);
+    return j ? j.name : "?";
+  }
 </script>
 
 <aside class="sidebar">
@@ -64,7 +70,8 @@
               {server.name}
             </div>
             <div class="server-host" style="color: var(--text-muted);">
-              {server.host}:{server.port}
+              {server.host}:{server.port}{#if server.viaServerId}
+                <span class="server-via">via {jumpName(server.viaServerId, serverList)}</span>{/if}
             </div>
           </div>
           <div class="server-actions">
@@ -212,6 +219,12 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .server-via {
+      margin-left: 6px;
+      opacity: 0.7;
+      font-style: italic;
     }
 
     .server-actions {

@@ -14,7 +14,36 @@ type Client struct {
 	client *ssh.Client
 }
 
-func Connect(server models.ServerConfig) (*Client, error) {
+func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
+	config, addr, err := buildClientConfig(server)
+	if err != nil {
+		return nil, err
+	}
+
+	if jump != nil {
+		conn, err := jump.client.Dial("tcp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial %s through jump server: %w", addr, err)
+		}
+
+		nconn, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to handshake with %s via jump server: %w", addr, err)
+		}
+
+		return &Client{client: ssh.NewClient(nconn, chans, reqs)}, nil
+	}
+
+	conn, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to %s: %w", addr, err)
+	}
+
+	return &Client{client: conn}, nil
+}
+
+func buildClientConfig(server models.ServerConfig) (*ssh.ClientConfig, string, error) {
 	var authMethods []ssh.AuthMethod
 
 	switch server.AuthMethod {
@@ -29,11 +58,11 @@ func Connect(server models.ServerConfig) (*Client, error) {
 			signer, err = ssh.ParsePrivateKey([]byte(server.PrivateKey))
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
+			return nil, "", fmt.Errorf("failed to parse private key: %w", err)
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	default:
-		return nil, fmt.Errorf("unsupported auth method: %s", server.AuthMethod)
+		return nil, "", fmt.Errorf("unsupported auth method: %s", server.AuthMethod)
 	}
 
 	config := &ssh.ClientConfig{
@@ -44,12 +73,7 @@ func Connect(server models.ServerConfig) (*Client, error) {
 	}
 
 	addr := fmt.Sprintf("%s:%d", server.Host, server.Port)
-	conn, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to %s: %w", addr, err)
-	}
-
-	return &Client{client: conn}, nil
+	return config, addr, nil
 }
 
 func (c *Client) Exec(cmd string) (string, string, error) {
@@ -89,8 +113,8 @@ func (c *Client) IsConnected() bool {
 	return err == nil
 }
 
-func TestConnection(server models.ServerConfig) (*models.TestConnectionResult, error) {
-	client, err := Connect(server)
+func TestConnection(server models.ServerConfig, jump *Client) (*models.TestConnectionResult, error) {
+	client, err := Connect(server, jump)
 	if err != nil {
 		return &models.TestConnectionResult{
 			Success: false,

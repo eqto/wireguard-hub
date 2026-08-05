@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X, Plug, Loader2 } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardadmin/internal/server/service.js";
-  import { error } from "../stores/servers";
+  import { error, servers } from "../stores/servers";
   import { unwrapResponse } from "../utils";
 
   let {
@@ -22,8 +22,17 @@
   let password = $state(server?.password || "");
   let privateKey = $state(server?.privateKey || "");
   let passphrase = $state(server?.passphrase || "");
+  let viaServerId = $state(server?.viaServerId || "");
   let testing = $state(false);
   let testResult = $state<{ success: boolean; message: string } | null>(null);
+
+  // Candidates for jump host: exclude the server being edited and servers that
+  // themselves use a jump host (single-hop constraint). Backend still validates.
+  let jumpCandidates = $derived(
+    ($servers || []).filter(
+      (s) => s.id !== server?.id && !s.viaServerId,
+    ),
+  );
 
   async function handleTest() {
     testing = true;
@@ -39,6 +48,7 @@
         password: password,
         privateKey: privateKey,
         passphrase: passphrase,
+        viaServerId: viaServerId,
       };
       const result = await ServerService.TestConnection(data);
       const r = unwrapResponse(result);
@@ -62,6 +72,7 @@
       password: password,
       privateKey: privateKey,
       passphrase: passphrase,
+      viaServerId: viaServerId,
     });
   }
 </script>
@@ -118,6 +129,16 @@
             class="input"
           />
         </div>
+      </div>
+
+      <div class="form-group">
+        <label class="label">Connect via (optional)</label>
+        <select bind:value={viaServerId} class="input">
+          <option value="">Direct connection</option>
+          {#each jumpCandidates as candidate (candidate.id)}
+            <option value={candidate.id}>{candidate.name}</option>
+          {/each}
+        </select>
       </div>
 
       <div class="form-group">

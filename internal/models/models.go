@@ -12,6 +12,7 @@ type ServerConfig struct {
 	Password   string `yaml:"password,omitempty" json:"password,omitempty"`
 	PrivateKey string `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
 	Passphrase string `yaml:"passphrase,omitempty" json:"passphrase,omitempty"`
+	ViaServerID string `yaml:"viaServerId,omitempty" json:"viaServerId,omitempty"`
 }
 
 type WGInterface struct {

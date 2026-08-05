@@ -41,6 +41,7 @@ export interface ServerConfig {
     "password"?: string;
     "privateKey"?: string;
     "passphrase"?: string;
+    "viaServerId"?: string;
 }
 
 export interface TestConnectionResult {
