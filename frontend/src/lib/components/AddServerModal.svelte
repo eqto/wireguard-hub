@@ -130,15 +130,17 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="label">Connect via (optional)</label>
-        <select bind:value={viaServerId} class="input">
-          <option value="">Direct connection</option>
-          {#each jumpCandidates as candidate (candidate.id)}
-            <option value={candidate.id}>{candidate.name}</option>
-          {/each}
-        </select>
-      </div>
+      {#if jumpCandidates.length > 0}
+        <div class="form-group">
+          <label class="label">Connect via (optional)</label>
+          <select bind:value={viaServerId} class="input">
+            <option value="">Direct connection</option>
+            {#each jumpCandidates as candidate (candidate.id)}
+              <option value={candidate.id}>{candidate.name}</option>
+            {/each}
+          </select>
+        </div>
+      {/if}
 
       <div class="form-group">
         <label class="label">Username</label>
