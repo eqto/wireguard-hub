@@ -79,7 +79,6 @@
 
 <div
   class="modal-overlay"
-  on:click={onClose}
   on:keydown={(e) => e.key === "Escape" && onClose()}
   role="button"
   tabindex="0"
