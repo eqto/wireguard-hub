@@ -1,0 +1,32 @@
+# Build output
+.task
+bin
+frontend/dist
+
+# Dependencies
+frontend/node_modules
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Go
+*.test
+*.out
+
+# Wails build artifacts
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+
+# Environment
+.env
+.env.local
+.env.*.local
+WireguardAdmin.code-workspace
