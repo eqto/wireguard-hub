@@ -355,7 +355,7 @@ func parsePeerMeta(configText string) map[string]models.WGPeer {
 			continue
 		}
 
-		if currentPubKey != "" || strings.HasPrefix(trimmed, "# Name") || strings.HasPrefix(trimmed, "# Description") {
+		if currentPubKey != "" || strings.HasPrefix(trimmed, "PublicKey") || strings.HasPrefix(trimmed, "# Name") || strings.HasPrefix(trimmed, "# Description") {
 			// Check for PublicKey to associate metadata
 			if strings.HasPrefix(trimmed, "PublicKey") {
 				parts := strings.SplitN(trimmed, "=", 2)

@@ -8,10 +8,12 @@
     serverId,
     interfaceName,
     onClose,
+    onAdded,
   }: {
     serverId: string;
     interfaceName: string;
     onClose: () => void;
+    onAdded?: () => void;
   } = $props();
 
   let publicKey = $state("");
@@ -58,6 +60,7 @@
       };
       const res = await WireguardService.AddPeer(req);
       result = unwrapResponse(res);
+      onAdded?.();
     } catch (e: any) {
       error.set(e?.message || String(e));
     } finally {

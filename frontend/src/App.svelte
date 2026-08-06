@@ -135,13 +135,14 @@
 
   let selected = $derived($selectedServerId);
 
-  let viewMode = $state<'grid' | 'sidebar'>(
-    (localStorage.getItem('wg-admin-view-mode') as 'grid' | 'sidebar') || 'grid',
+  let viewMode = $state<"grid" | "sidebar">(
+    (localStorage.getItem("wg-admin-view-mode") as "grid" | "sidebar") ||
+      "grid",
   );
 
   function toggleViewMode() {
-    viewMode = viewMode === 'grid' ? 'sidebar' : 'grid';
-    localStorage.setItem('wg-admin-view-mode', viewMode);
+    viewMode = viewMode === "grid" ? "sidebar" : "grid";
+    localStorage.setItem("wg-admin-view-mode", viewMode);
     selectedServerId.set(null);
   }
 </script>
@@ -158,8 +159,29 @@
       />
     {/if}
     <main class="app-main">
-    {#if viewMode === "grid"}
-      {#if selected}
+      {#if viewMode === "grid"}
+        {#if selected}
+          <ServerDashboard
+            serverId={selected}
+            onRefresh={handleRefreshStatus}
+            onAddPeer={handleAddPeer}
+            onCreateInterface={handleCreateInterface}
+            onViewConfig={handleViewConfig}
+            onEditServer={handleEditServer}
+            onDeleteServer={handleDeleteServer}
+            onBack={() => selectedServerId.set(null)}
+            {refreshTrigger}
+          />
+        {:else}
+          <ServerGrid
+            onSelect={handleSelectServer}
+            onAddServer={handleAddServer}
+            onEditServer={handleEditServer}
+            onDeleteServer={handleDeleteServer}
+            onToggleView={toggleViewMode}
+          />
+        {/if}
+      {:else if selected}
         <ServerDashboard
           serverId={selected}
           onRefresh={handleRefreshStatus}
@@ -168,29 +190,7 @@
           onViewConfig={handleViewConfig}
           onEditServer={handleEditServer}
           onDeleteServer={handleDeleteServer}
-          onBack={() => selectedServerId.set(null)}
-          refreshTrigger={refreshTrigger}
-        />
-      {:else}
-        <ServerGrid
-          onSelect={handleSelectServer}
-          onAddServer={handleAddServer}
-          onEditServer={handleEditServer}
-          onDeleteServer={handleDeleteServer}
-          onToggleView={toggleViewMode}
-        />
-      {/if}
-    {:else}
-      {#if selected}
-        <ServerDashboard
-          serverId={selected}
-          onRefresh={handleRefreshStatus}
-          onAddPeer={handleAddPeer}
-          onCreateInterface={handleCreateInterface}
-          onViewConfig={handleViewConfig}
-          onEditServer={handleEditServer}
-          onDeleteServer={handleDeleteServer}
-          refreshTrigger={refreshTrigger}
+          {refreshTrigger}
         />
       {:else}
         <div class="app-empty">
@@ -211,7 +211,6 @@
           </p>
         </div>
       {/if}
-    {/if}
     </main>
   </div>
   <Terminal />
@@ -233,6 +232,7 @@
     serverId={selected}
     interfaceName={peerInterface}
     onClose={() => (showAddPeer = false)}
+    onAdded={() => refreshTrigger++}
   />
 {/if}
 
