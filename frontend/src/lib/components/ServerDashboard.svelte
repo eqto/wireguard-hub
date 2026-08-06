@@ -48,6 +48,7 @@
   let wgNotInstalled = $state(false);
   let installing = $state(false);
   let installDone = $state(false);
+  let installSuccess = $state(false);
   let installCancelled = $state(false);
 
   let offDone: (() => void) | null = null;
@@ -142,6 +143,7 @@
   async function handleInstallWG() {
     installing = true;
     installDone = false;
+    installSuccess = false;
     installCancelled = false;
 
     offDone = Events.On("wg-install-done", (event: any) => {
@@ -149,6 +151,7 @@
       installDone = true;
       const data = event.data;
       if (data?.success) {
+        installSuccess = true;
         setTimeout(() => {
           loadStatus();
         }, 1500);
@@ -267,6 +270,14 @@
           <Square class="icon-sm" />
           Cancel
         </button>
+      {:else if installDone && installSuccess}
+        <Loader2
+          class="icon-lg spin"
+          style="color: var(--accent); width: 32px; height: 32px;"
+        />
+        <p class="dashboard-empty-text" style="color: var(--text-muted);">
+          WireGuard installed successfully. Refreshing...
+        </p>
       {:else if installDone}
         <p class="dashboard-empty-text" style="color: var(--text-muted);">
           Installation failed or cancelled. Check terminal for details.
