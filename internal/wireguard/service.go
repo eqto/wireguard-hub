@@ -4,15 +4,21 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"wireguardadmin/internal/models"
 	"wireguardadmin/internal/server"
 	"wireguardadmin/internal/ssh"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+	cryptossh "golang.org/x/crypto/ssh"
 )
 
 type Service struct {
 	serverSvc *server.Service
+	mu        sync.Mutex
+	session   *cryptossh.Session
 }
 
 func NewService(serverSvc *server.Service) *Service {
@@ -22,47 +28,95 @@ func NewService(serverSvc *server.Service) *Service {
 func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
+		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
 		return false, err
+	}
+
+	emit := func(line string) {
+		application.Get().Event.Emit("wg-install-output", line)
 	}
 
 	// Detect package manager and install
 	_, _, aptErr := client.Exec("command -v apt-get")
 	if aptErr == nil {
-		_, stderr, err := client.Exec("sudo apt-get update -y && sudo apt-get install -y wireguard wireguard-tools")
+		session, err := client.ExecStreaming("sudo apt-get update -y 2>&1 && sudo apt-get install -y wireguard wireguard-tools 2>&1", emit)
+		s.mu.Lock()
+		s.session = session
+		s.mu.Unlock()
 		if err != nil {
-			return false, fmt.Errorf("apt install failed: %s: %w", stderr, err)
+			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
+			return false, err
 		}
+		s.mu.Lock()
+		s.session = nil
+		s.mu.Unlock()
+		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
 		return true, nil
 	}
 
 	_, _, dnfErr := client.Exec("command -v dnf")
 	if dnfErr == nil {
-		_, stderr, err := client.Exec("sudo dnf install -y wireguard-tools")
+		session, err := client.ExecStreaming("sudo dnf install -y wireguard-tools 2>&1", emit)
+		s.mu.Lock()
+		s.session = session
+		s.mu.Unlock()
 		if err != nil {
-			return false, fmt.Errorf("dnf install failed: %s: %w", stderr, err)
+			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
+			return false, err
 		}
+		s.mu.Lock()
+		s.session = nil
+		s.mu.Unlock()
+		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
 		return true, nil
 	}
 
 	_, _, yumErr := client.Exec("command -v yum")
 	if yumErr == nil {
-		_, stderr, err := client.Exec("sudo yum install -y epel-release && sudo yum install -y wireguard-tools")
+		session, err := client.ExecStreaming("sudo yum install -y epel-release 2>&1 && sudo yum install -y wireguard-tools 2>&1", emit)
+		s.mu.Lock()
+		s.session = session
+		s.mu.Unlock()
 		if err != nil {
-			return false, fmt.Errorf("yum install failed: %s: %w", stderr, err)
+			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
+			return false, err
 		}
+		s.mu.Lock()
+		s.session = nil
+		s.mu.Unlock()
+		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
 		return true, nil
 	}
 
 	_, _, pacmanErr := client.Exec("command -v pacman")
 	if pacmanErr == nil {
-		_, stderr, err := client.Exec("sudo pacman -S --noconfirm wireguard-tools")
+		session, err := client.ExecStreaming("sudo pacman -S --noconfirm wireguard-tools 2>&1", emit)
+		s.mu.Lock()
+		s.session = session
+		s.mu.Unlock()
 		if err != nil {
-			return false, fmt.Errorf("pacman install failed: %s: %w", stderr, err)
+			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
+			return false, err
 		}
+		s.mu.Lock()
+		s.session = nil
+		s.mu.Unlock()
+		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
 		return true, nil
 	}
 
+	application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": "no supported package manager found"})
 	return false, fmt.Errorf("no supported package manager found (apt/dnf/yum/pacman)")
+}
+
+func (s *Service) CancelInstall() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.session != nil {
+		s.session.Close()
+		s.session = nil
+	}
+	return true, nil
 }
 
 func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {

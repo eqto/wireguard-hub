@@ -1,8 +1,10 @@
 package ssh
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -109,6 +111,41 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 
 	err = session.Run(finalCmd)
 	return stdout.String(), stderr.String(), err
+}
+
+// ExecStreaming runs a command and calls onLine for each line of stdout/stderr.
+// Returns the session (can be closed to cancel) and error from Run.
+func (c *Client) ExecStreaming(cmd string, onLine func(string)) (*ssh.Session, error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	finalCmd := cmd
+	finalInput := ""
+	if c.sudoPassword != "" && strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
+		finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
+		finalInput = c.sudoPassword + "\n"
+	}
+
+	if finalInput != "" {
+		session.Stdin = bytes.NewBufferString(finalInput)
+	}
+
+	// Stream stdout line-by-line; commands should redirect stderr with 2>&1
+	pr, pw := io.Pipe()
+	session.Stdout = pw
+
+	go func() {
+		scanner := bufio.NewScanner(pr)
+		for scanner.Scan() {
+			onLine(scanner.Text())
+		}
+	}()
+
+	err = session.Run(finalCmd)
+	pw.Close()
+	return session, err
 }
 
 func (c *Client) Close() error {
