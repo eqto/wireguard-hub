@@ -140,7 +140,7 @@ func TestConnection(server models.ServerConfig, jump *Client) (*models.TestConne
 	if err != nil {
 		return &models.TestConnectionResult{
 			Success: true,
-			Message: "SSH connected, but WireGuard may not be installed: " + stdout,
+			Message: "SSH connected, but WireGuard may not be installed. " + stdout,
 		}, nil
 	}
 

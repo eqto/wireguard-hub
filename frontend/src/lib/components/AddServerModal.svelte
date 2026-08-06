@@ -111,7 +111,7 @@
 
       <div class="form-row">
         <div class="form-group form-grow">
-          <label class="label">Host</label>
+          <label class="label">Hostname or IP Address</label>
           <input
             bind:value={host}
             type="text"
@@ -254,6 +254,16 @@
 
   .form-fixed-96 {
     width: 96px;
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
   }
 
   .radio-row {
