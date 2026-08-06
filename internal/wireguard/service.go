@@ -19,10 +19,20 @@ type Service struct {
 	serverSvc *server.Service
 	mu        sync.Mutex
 	session   *cryptossh.Session
+
+	serverInfoMu    sync.Mutex
+	serverInfoCache map[string]serverInfo
+}
+
+type serverInfo struct {
+	Hostname       string
+	ServerIP       string
+	OS             string
+	PackageManager string
 }
 
 func NewService(serverSvc *server.Service) *Service {
-	return &Service{serverSvc: serverSvc}
+	return &Service{serverSvc: serverSvc, serverInfoCache: make(map[string]serverInfo)}
 }
 
 func (s *Service) InstallWireGuard(serverID string) (bool, error) {
@@ -173,12 +183,12 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 				Interfaces:     []models.WGInterface{},
 				WGNotInstalled: true,
 			}
-			fillServerInfo(client, &status)
+			s.fillServerInfo(serverID, client, &status)
 			return status, nil
 		}
 		_ = stderr
 		status := models.WGStatus{Interfaces: []models.WGInterface{}}
-		fillServerInfo(client, &status)
+		s.fillServerInfo(serverID, client, &status)
 		return status, nil
 	}
 
@@ -199,12 +209,23 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		}
 	}
 
-	fillServerInfo(client, &status)
+	s.fillServerInfo(serverID, client, &status)
 
 	return status, nil
 }
 
-func fillServerInfo(client *ssh.Client, status *models.WGStatus) {
+func (s *Service) fillServerInfo(serverID string, client *ssh.Client, status *models.WGStatus) {
+	s.serverInfoMu.Lock()
+	cached, ok := s.serverInfoCache[serverID]
+	s.serverInfoMu.Unlock()
+	if ok {
+		status.Hostname = cached.Hostname
+		status.ServerIP = cached.ServerIP
+		status.OS = cached.OS
+		status.PackageManager = cached.PackageManager
+		return
+	}
+
 	hostname, _, _ := client.Exec("hostname")
 	status.Hostname = strings.TrimSpace(hostname)
 
@@ -228,6 +249,15 @@ func fillServerInfo(client *ssh.Client, status *models.WGStatus) {
 	} else if _, _, err := client.Exec("command -v pacman"); err == nil {
 		status.PackageManager = "pacman"
 	}
+
+	s.serverInfoMu.Lock()
+	s.serverInfoCache[serverID] = serverInfo{
+		Hostname:       status.Hostname,
+		ServerIP:       status.ServerIP,
+		OS:             status.OS,
+		PackageManager: status.PackageManager,
+	}
+	s.serverInfoMu.Unlock()
 }
 
 func parseWGDump(output string) models.WGStatus {
