@@ -6,17 +6,20 @@
   import Pencil from "@lucide/svelte/icons/pencil";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Shield from "@lucide/svelte/icons/shield";
+  import LayoutGrid from "@lucide/svelte/icons/layout-grid";
 
   let {
     onAddServer,
     onSelect,
     onEditServer,
     onDeleteServer,
+    onToggleView,
   }: {
     onAddServer: () => void;
     onSelect: (id: string) => void;
     onEditServer: (server: any) => void;
     onDeleteServer: (id: string) => void;
+    onToggleView: () => void;
   } = $props();
 
   let serverList = $derived($servers);
@@ -36,6 +39,9 @@
     <span class="sidebar-title" style="color: var(--text-primary);"
       >WireGuard Admin</span
     >
+    <button on:click={onToggleView} class="sidebar-toggle-btn" title="Switch to grid view">
+      <LayoutGrid class="icon" style="color: var(--text-secondary);" />
+    </button>
   </div>
 
   <div class="sidebar-list">
@@ -177,6 +183,19 @@
     &-footer {
       padding: 16px;
       border-top: 1px solid var(--border);
+    }
+
+    &-toggle-btn {
+      margin-left: auto;
+      padding: 4px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+
+      &:hover {
+        background-color: var(--bg-tertiary);
+      }
     }
   }
 

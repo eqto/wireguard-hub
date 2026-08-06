@@ -7,6 +7,7 @@
   import PeerTable from "./PeerTable.svelte";
   import EditPeerModal from "./EditPeerModal.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Plus from "@lucide/svelte/icons/plus";
@@ -22,6 +23,7 @@
     onViewConfig,
     onEditServer,
     onDeleteServer,
+    onBack,
   }: {
     serverId: string;
     onRefresh: () => void;
@@ -30,6 +32,7 @@
     onViewConfig: (name: string, content: string) => void;
     onEditServer: (server: any) => void;
     onDeleteServer: (id: string) => void;
+    onBack?: () => void;
   } = $props();
 
   let status = $state<any>(null);
@@ -120,6 +123,11 @@
   {#if serverInfo}
     <div class="dashboard-header">
       <div class="dashboard-title-row">
+        {#if onBack}
+          <button on:click={onBack} class="btn-icon back-btn" title="Back to servers">
+            <ArrowLeft class="icon" style="color: var(--text-secondary);" />
+          </button>
+        {/if}
         <div>
           <h1 class="dashboard-title" style="color: var(--text-primary);">
             {serverInfo.name}
@@ -411,5 +419,17 @@
 
   .btn-icon-small {
     padding: 6px;
+  }
+
+  .back-btn {
+    padding: 6px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--bg-tertiary);
+    }
   }
 </style>

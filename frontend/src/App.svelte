@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
+  import ServerGrid from "./lib/components/ServerGrid.svelte";
   import ServerDashboard from "./lib/components/ServerDashboard.svelte";
   import AddServerModal from "./lib/components/AddServerModal.svelte";
   import AddPeerModal from "./lib/components/AddPeerModal.svelte";
@@ -127,44 +128,80 @@
   }
 
   let selected = $derived($selectedServerId);
+
+  let viewMode = $state<'grid' | 'sidebar'>(
+    (localStorage.getItem('wg-admin-view-mode') as 'grid' | 'sidebar') || 'grid',
+  );
+
+  function toggleViewMode() {
+    viewMode = viewMode === 'grid' ? 'sidebar' : 'grid';
+    localStorage.setItem('wg-admin-view-mode', viewMode);
+    selectedServerId.set(null);
+  }
 </script>
 
 <div class="app-layout">
-  <Sidebar
-    onAddServer={handleAddServer}
-    onSelect={handleSelectServer}
-    onEditServer={handleEditServer}
-    onDeleteServer={handleDeleteServer}
-  />
+  {#if viewMode === "sidebar"}
+    <Sidebar
+      onAddServer={handleAddServer}
+      onSelect={handleSelectServer}
+      onEditServer={handleEditServer}
+      onDeleteServer={handleDeleteServer}
+      onToggleView={toggleViewMode}
+    />
+  {/if}
   <main class="app-main">
-    {#if selected}
-      <ServerDashboard
-        serverId={selected}
-        onRefresh={handleRefreshStatus}
-        onAddPeer={handleAddPeer}
-        onCreateInterface={handleCreateInterface}
-        onViewConfig={handleViewConfig}
-        onEditServer={handleEditServer}
-        onDeleteServer={handleDeleteServer}
-      />
+    {#if viewMode === "grid"}
+      {#if selected}
+        <ServerDashboard
+          serverId={selected}
+          onRefresh={handleRefreshStatus}
+          onAddPeer={handleAddPeer}
+          onCreateInterface={handleCreateInterface}
+          onViewConfig={handleViewConfig}
+          onEditServer={handleEditServer}
+          onDeleteServer={handleDeleteServer}
+          onBack={() => selectedServerId.set(null)}
+        />
+      {:else}
+        <ServerGrid
+          onSelect={handleSelectServer}
+          onAddServer={handleAddServer}
+          onEditServer={handleEditServer}
+          onDeleteServer={handleDeleteServer}
+          onToggleView={toggleViewMode}
+        />
+      {/if}
     {:else}
-      <div class="app-empty">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          class="app-empty-icon"
-          style="color: var(--text-muted);"
-        >
-          <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" />
-          <path d="M12 22V12" />
-          <path d="M4 7l8 5 8-5" />
-        </svg>
-        <p class="app-empty-text" style="color: var(--text-muted);">
-          Select a server to get started
-        </p>
-      </div>
+      {#if selected}
+        <ServerDashboard
+          serverId={selected}
+          onRefresh={handleRefreshStatus}
+          onAddPeer={handleAddPeer}
+          onCreateInterface={handleCreateInterface}
+          onViewConfig={handleViewConfig}
+          onEditServer={handleEditServer}
+          onDeleteServer={handleDeleteServer}
+        />
+      {:else}
+        <div class="app-empty">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            class="app-empty-icon"
+            style="color: var(--text-muted);"
+          >
+            <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" />
+            <path d="M12 22V12" />
+            <path d="M4 7l8 5 8-5" />
+          </svg>
+          <p class="app-empty-text" style="color: var(--text-muted);">
+            Select a server to get started
+          </p>
+        </div>
+      {/if}
     {/if}
   </main>
 </div>
