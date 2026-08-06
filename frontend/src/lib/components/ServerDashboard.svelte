@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { Events } from "@wailsio/runtime";
-  import * as WireguardService from "../../../bindings/wireguardadmin/internal/wireguard/service.js";
+  import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { servers, loading, error } from "../stores/servers";
   import { formatBytes, unwrapResponse } from "../utils";
   import StatusBadge from "./StatusBadge.svelte";
@@ -16,7 +16,6 @@
   import Sync from "@lucide/svelte/icons/refresh-ccw";
   import Loader2 from "@lucide/svelte/icons/loader-2";
   import Download from "@lucide/svelte/icons/download";
-  import X from "@lucide/svelte/icons/x";
   import Square from "@lucide/svelte/icons/square";
 
   let {
@@ -48,12 +47,9 @@
   let editingPeerIface = $state("");
   let wgNotInstalled = $state(false);
   let installing = $state(false);
-  let installOutput = $state<string[]>([]);
   let installDone = $state(false);
   let installCancelled = $state(false);
-  let terminalEl: HTMLDivElement | null = null;
 
-  let offOutput: (() => void) | null = null;
   let offDone: (() => void) | null = null;
 
   onMount(() => {
@@ -67,7 +63,6 @@
   });
 
   onDestroy(() => {
-    if (offOutput) offOutput();
     if (offDone) offDone();
   });
 
@@ -148,28 +143,15 @@
     installing = true;
     installDone = false;
     installCancelled = false;
-    installOutput = [];
-
-    offOutput = Events.On("wg-install-output", (event: any) => {
-      installOutput = [...installOutput, event.data];
-      if (terminalEl) {
-        terminalEl.scrollTop = terminalEl.scrollHeight;
-      }
-    });
 
     offDone = Events.On("wg-install-done", (event: any) => {
       installing = false;
       installDone = true;
       const data = event.data;
       if (data?.success) {
-        installOutput = [...installOutput, "", "Installation completed successfully."];
         setTimeout(() => {
           loadStatus();
         }, 1500);
-      } else if (installCancelled) {
-        installOutput = [...installOutput, "", "Installation cancelled."];
-      } else {
-        installOutput = [...installOutput, "", `Installation failed: ${data?.error || "unknown error"}`];
       }
     });
 
@@ -179,7 +161,6 @@
       if (!installDone) {
         installing = false;
         installDone = true;
-        installOutput = [...installOutput, "", `Error: ${e?.message || String(e)}`];
       }
     }
   }
@@ -191,11 +172,6 @@
     } catch (e: any) {
       // ignore
     }
-  }
-
-  function handleCloseTerminal() {
-    installDone = false;
-    installOutput = [];
   }
 
   let interfaces = $derived(status?.interfaces || []);
@@ -278,31 +254,28 @@
       />
     </div>
   {:else if wgNotInstalled}
-    {#if installDone || installing}
-      <div class="install-terminal-wrapper">
-        <div class="install-terminal-header">
-          <span class="install-terminal-title" style="color: var(--text-secondary);">
-            {#if installing}Installing WireGuard...{:else}Installation output{/if}
-          </span>
-          {#if installing}
-            <button on:click={handleCancelInstall} class="btn btn-secondary btn-sm">
-              <Square class="icon-sm" />
-              Cancel
-            </button>
-          {:else}
-            <button on:click={handleCloseTerminal} class="btn-icon" title="Close terminal">
-              <X class="icon" style="color: var(--text-secondary);" />
-            </button>
-          {/if}
-        </div>
-        <div class="install-terminal" bind:this={terminalEl}>
-          {#each installOutput as line}
-            <div class="terminal-line">{line}</div>
-          {/each}
-        </div>
-      </div>
-    {:else}
-      <div class="dashboard-empty">
+    <div class="dashboard-empty">
+      {#if installing}
+        <Loader2
+          class="icon-lg spin"
+          style="color: var(--accent); width: 32px; height: 32px;"
+        />
+        <p class="dashboard-empty-text" style="color: var(--text-muted);">
+          Installing WireGuard... Check terminal for output.
+        </p>
+        <button on:click={handleCancelInstall} class="btn btn-secondary">
+          <Square class="icon-sm" />
+          Cancel
+        </button>
+      {:else if installDone}
+        <p class="dashboard-empty-text" style="color: var(--text-muted);">
+          Installation failed or cancelled. Check terminal for details.
+        </p>
+        <button on:click={handleInstallWG} class="btn btn-primary">
+          <Download class="icon" />
+          Retry Install
+        </button>
+      {:else}
         <p class="dashboard-empty-text" style="color: var(--text-muted);">
           WireGuard is not installed on this server
         </p>
@@ -310,8 +283,8 @@
           <Download class="icon" />
           Install WireGuard
         </button>
-      </div>
-    {/if}
+      {/if}
+    </div>
   {:else if interfaces.length === 0}
     <div class="dashboard-empty">
       <p class="dashboard-empty-text" style="color: var(--text-muted);">
@@ -578,55 +551,5 @@
   .server-endpoint-line {
     font-size: 13px;
     line-height: 1.3;
-  }
-
-  .install-terminal-wrapper {
-    margin: 16px 0;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-  }
-
-  .install-terminal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background-color: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .install-terminal-title {
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  .install-terminal {
-    background-color: #0c0c0c;
-    padding: 12px;
-    height: 400px;
-    overflow-y: auto;
-    font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-  .terminal-line {
-    color: #e0e0e0;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-
-  .btn-sm {
-    padding: 4px 10px;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .icon-sm {
-    width: 12px;
-    height: 12px;
   }
 </style>

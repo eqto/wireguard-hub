@@ -5,11 +5,12 @@ import (
 	"strings"
 	"sync"
 
-	"wireguardadmin/internal/config"
-	"wireguardadmin/internal/models"
-	"wireguardadmin/internal/ssh"
+	"wireguardhub/internal/config"
+	"wireguardhub/internal/models"
+	"wireguardhub/internal/ssh"
 
 	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type Service struct {
@@ -246,6 +247,13 @@ func (s *Service) GetClient(serverID string) (*ssh.Client, error) {
 	client, err := ssh.Connect(server, jump)
 	if err != nil {
 		return nil, err
+	}
+
+	client.ServerID = serverID
+	client.OnExec = func(e ssh.ExecEvent) {
+		if app := application.Get(); app != nil {
+			app.Event.Emit("ssh-terminal", e)
+		}
 	}
 
 	s.mu.Lock()

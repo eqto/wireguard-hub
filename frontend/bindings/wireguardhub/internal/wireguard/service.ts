@@ -10,45 +10,45 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as models$0 from "../models/models.js";
 
 export function AddPeer(req: models$0.AddPeerRequest): $CancellablePromise<models$0.AddPeerResult> {
-    return $Call.ByID(2148112281, req);
+    return $Call.ByID(3098433953, req);
 }
 
 export function CancelInstall(): $CancellablePromise<boolean> {
-    return $Call.ByID(2845208359);
+    return $Call.ByID(3154375407);
 }
 
 export function CreateInterface(req: models$0.CreateInterfaceRequest): $CancellablePromise<models$0.WGInterface> {
-    return $Call.ByID(988100633, req);
+    return $Call.ByID(441999553, req);
 }
 
 export function DeleteInterface(serverID: string, name: string): $CancellablePromise<boolean> {
-    return $Call.ByID(3786164332, serverID, name);
+    return $Call.ByID(1702654596, serverID, name);
 }
 
 export function GenerateKeyPair(serverID: string): $CancellablePromise<models$0.KeyPair> {
-    return $Call.ByID(2202449268, serverID);
+    return $Call.ByID(1447813084, serverID);
 }
 
 export function GetInterfaceConfig(serverID: string, name: string): $CancellablePromise<string> {
-    return $Call.ByID(1337927723, serverID, name);
+    return $Call.ByID(3101484819, serverID, name);
 }
 
 export function GetStatus(serverID: string): $CancellablePromise<models$0.WGStatus> {
-    return $Call.ByID(552800524, serverID);
+    return $Call.ByID(1337592116, serverID);
 }
 
 export function InstallWireGuard(serverID: string): $CancellablePromise<boolean> {
-    return $Call.ByID(764955237, serverID);
+    return $Call.ByID(2229465805, serverID);
 }
 
 export function RemovePeer(serverID: string, iface: string, publicKey: string): $CancellablePromise<boolean> {
-    return $Call.ByID(312014626, serverID, iface, publicKey);
+    return $Call.ByID(1985494234, serverID, iface, publicKey);
 }
 
 export function SyncConfig(serverID: string, name: string): $CancellablePromise<boolean> {
-    return $Call.ByID(613508359, serverID, name);
+    return $Call.ByID(1268158863, serverID, name);
 }
 
 export function UpdatePeerMeta(req: models$0.UpdatePeerMetaRequest): $CancellablePromise<boolean> {
-    return $Call.ByID(2043588130, req);
+    return $Call.ByID(1470998058, req);
 }

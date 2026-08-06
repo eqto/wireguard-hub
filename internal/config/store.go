@@ -4,14 +4,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"wireguardadmin/internal/models"
+	"wireguardhub/internal/models"
 
 	"github.com/adrg/xdg"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	appConfigDir  = "wireguard-admin"
+	appConfigDir  = "wireguardhub"
 	configFile    = "servers.yaml"
 )
 

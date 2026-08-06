@@ -5,10 +5,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
-	"wireguardadmin/internal/models"
+	"wireguardhub/internal/models"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -16,6 +17,26 @@ import (
 type Client struct {
 	client       *ssh.Client
 	sudoPassword string
+	ServerID     string
+	OnExec       func(ExecEvent)
+}
+
+type ExecEvent struct {
+	ServerID string `json:"serverId"`
+	Kind     string `json:"kind"` // "command", "output", "done"
+	Command  string `json:"command,omitempty"`
+	Line     string `json:"line,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+func (c *Client) emit(e ExecEvent) {
+	if c.OnExec != nil {
+		e.ServerID = c.ServerID
+		log.Printf("[ssh-terminal] emitting: serverId=%s kind=%s command=%q line=%q error=%q", e.ServerID, e.Kind, e.Command, e.Line, e.Error)
+		c.OnExec(e)
+	} else {
+		log.Printf("[ssh-terminal] OnExec is nil for serverId=%s, skipping emit", c.ServerID)
+	}
 }
 
 func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
@@ -85,8 +106,15 @@ func (c *Client) Exec(cmd string) (string, string, error) {
 }
 
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
+	c.emit(ExecEvent{Kind: "command", Command: cmd})
+
 	session, err := c.client.NewSession()
 	if err != nil {
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+		}
+		c.emit(ExecEvent{Kind: "done", Error: errMsg})
 		return "", "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
@@ -110,14 +138,42 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 	}
 
 	err = session.Run(finalCmd)
+
+	// Emit output lines from stdout and stderr.
+	for _, line := range strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n") {
+		if line != "" {
+			c.emit(ExecEvent{Kind: "output", Line: line})
+		}
+	}
+	if stderr.Len() > 0 {
+		for _, line := range strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n") {
+			if line != "" {
+				c.emit(ExecEvent{Kind: "output", Line: line})
+			}
+		}
+	}
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	c.emit(ExecEvent{Kind: "done", Error: errMsg})
+
 	return stdout.String(), stderr.String(), err
 }
 
 // ExecStreaming runs a command and calls onLine for each line of stdout/stderr.
 // Returns the session (can be closed to cancel) and error from Run.
 func (c *Client) ExecStreaming(cmd string, onLine func(string)) (*ssh.Session, error) {
+	c.emit(ExecEvent{Kind: "command", Command: cmd})
+
 	session, err := c.client.NewSession()
 	if err != nil {
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+		}
+		c.emit(ExecEvent{Kind: "done", Error: errMsg})
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -136,15 +192,29 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (*ssh.Session, e
 	pr, pw := io.Pipe()
 	session.Stdout = pw
 
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		scanner := bufio.NewScanner(pr)
 		for scanner.Scan() {
-			onLine(scanner.Text())
+			line := scanner.Text()
+			if onLine != nil {
+				onLine(line)
+			}
+			c.emit(ExecEvent{Kind: "output", Line: line})
 		}
 	}()
 
 	err = session.Run(finalCmd)
 	pw.Close()
+	<-done
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	c.emit(ExecEvent{Kind: "done", Error: errMsg})
+
 	return session, err
 }
 
@@ -159,8 +229,12 @@ func (c *Client) IsConnected() bool {
 	if c.client == nil {
 		return false
 	}
-	_, _, err := c.Exec("true")
-	return err == nil
+	session, err := c.client.NewSession()
+	if err != nil {
+		return false
+	}
+	defer session.Close()
+	return session.Run("true") == nil
 }
 
 func TestConnection(server models.ServerConfig, jump *Client) (*models.TestConnectionResult, error) {

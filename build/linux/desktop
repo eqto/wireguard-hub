@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
 Name=My Product
-Comment=A WireguardAdmin application
+Comment=A WireguardHub application
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/wireguardadmin %u
+Exec=/usr/local/bin/wireguardhub %u
 Terminal=false
 Type=Application
-Icon=wireguardadmin
+Icon=wireguardhub
 Categories=Utility;
-StartupWMClass=wireguardadmin
+StartupWMClass=wireguardhub
 
  

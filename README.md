@@ -1,4 +1,4 @@
-# WireGuard Admin
+# WireguardHub
 
 A cross-platform desktop application to manage multiple WireGuard VPN servers over SSH. Built with Wails 3 (Go + Svelte 5), it provides a full graphical interface for WireGuard interface lifecycle, peer management, and live status monitoring — no agent required on the server.
 
@@ -58,7 +58,7 @@ The production binary is output to the `build/` directory.
 Server profiles are stored as YAML at:
 
 ```
-~/.config/wireguard-admin/servers.yaml
+~/.config/wireguardhub/servers.yaml
 ```
 
 Each profile includes: name, host, port, username, auth method (password/key), optional passphrase, jump server reference, and optional distro override.
@@ -66,11 +66,11 @@ Each profile includes: name, host, port, username, auth method (password/key), o
 ## Architecture
 
 ```
-WireguardAdmin/
+WireguardHub/
 ├── main.go                          # Entry point, Wails app + service registration
 ├── internal/
 │   ├── models/models.go             # Data structures (ServerConfig, WGInterface, WGPeer, etc.)
-│   ├── config/store.go              # YAML config load/save (~/.config/wireguard-admin/)
+│   ├── config/store.go              # YAML config load/save (~/.config/wireguardhub/)
 │   ├── ssh/client.go                # SSH connection manager (password/key auth, jump server)
 │   ├── server/service.go            # ServerService — CRUD for server profiles, SSH session pooling
 │   └── wireguard/

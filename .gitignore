@@ -29,4 +29,4 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 .env
 .env.local
 .env.*.local
-WireguardAdmin.code-workspace
+WireguardHub.code-workspace

@@ -30,7 +30,7 @@
     <div class="server-grid-title-row">
       <Shield class="server-grid-icon" style="color: var(--accent);" />
       <h1 class="server-grid-title" style="color: var(--text-primary);">
-        WireGuard Admin
+        WireguardHub
       </h1>
       <button on:click={onToggleView} class="grid-toggle-btn" title="Switch to sidebar view">
         <PanelLeft class="icon" style="color: var(--text-secondary);" />

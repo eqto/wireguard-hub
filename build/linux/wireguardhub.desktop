@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=wireguardadmin
-Exec=wireguardadmin
-Icon=wireguardadmin
+Name=wireguardhub
+Exec=wireguardhub
+Icon=wireguardhub
 Categories=Development;
 Terminal=false
 Keywords=wails

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X, Plug, Loader2 } from "@lucide/svelte";
-  import * as ServerService from "../../../bindings/wireguardadmin/internal/server/service.js";
+  import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
   import { error, servers } from "../stores/servers";
   import { unwrapResponse } from "../utils";
 

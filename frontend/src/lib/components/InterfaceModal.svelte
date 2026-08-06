@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X, Loader2, Sparkles } from "@lucide/svelte";
-  import * as WireguardService from "../../../bindings/wireguardadmin/internal/wireguard/service.js";
+  import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
   import { unwrapResponse } from "../utils";
 

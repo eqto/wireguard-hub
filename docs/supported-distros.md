@@ -1,6 +1,6 @@
 # Supported Linux Distributions
 
-WireGuard Admin supports multiple Linux distributions by abstracting distro-specific differences behind a `Distro` interface. This document covers what's supported, how detection works, and how to add new distros.
+WireguardHub supports multiple Linux distributions by abstracting distro-specific differences behind a `Distro` interface. This document covers what's supported, how detection works, and how to add new distros.
 
 ## Supported Distros
 
@@ -69,7 +69,7 @@ The detected distro is cached for the session. To persist it, set `distroId` in 
 You can override auto-detection in two ways:
 
 1. **UI**: In the Add/Edit Server modal, select a distro from the "Linux Distro" dropdown (defaults to "Auto-detect")
-2. **Config file**: Set the `distroId` field in `~/.config/wireguard-admin/servers.yaml`:
+2. **Config file**: Set the `distroId` field in `~/.config/wireguardhub/servers.yaml`:
 
 ```yaml
 - id: "abc-123"

@@ -8,7 +8,7 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="wireguardadmin"
+        Path="wireguardhub"
         Arguments=""
         InstallLocation="C:\Program Files\My Company\My Product">
     </Installer>
@@ -18,17 +18,17 @@
         PublisherName="CN=My Company"
         PublisherDisplayName="My Company"
         Version="0.1.0.0"
-        PackageDescription="A WireguardAdmin application">
+        PackageDescription="A WireguardHub application">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.wireguardadmin"
-                Description="A WireguardAdmin application"
+                Id="com.example.wireguardhub"
+                Description="A WireguardHub application"
                 DisplayName="My Product"
-                ExecutableName="wireguardadmin"
+                ExecutableName="wireguardhub"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -43,11 +43,11 @@
             <Framework>false</Framework>
             <DisplayName>My Product</DisplayName>
             <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A WireguardAdmin application</Description>
+            <Description>A WireguardHub application</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="wireguardadmin.msix" />
+    <SaveLocation PackagePath="wireguardhub.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

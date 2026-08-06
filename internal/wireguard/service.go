@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"wireguardadmin/internal/models"
-	"wireguardadmin/internal/server"
-	"wireguardadmin/internal/ssh"
+	"wireguardhub/internal/models"
+	"wireguardhub/internal/server"
+	"wireguardhub/internal/ssh"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	cryptossh "golang.org/x/crypto/ssh"
@@ -33,14 +33,18 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	}
 
 	emit := func(line string) {
-		application.Get().Event.Emit("wg-install-output", line)
+		application.Get().Event.Emit("ssh-terminal", map[string]interface{}{
+			"serverId": serverID,
+			"kind":     "output",
+			"line":     line,
+		})
 	}
 
 	// Detect package manager and install
 	_, _, aptErr := client.Exec("command -v apt-get")
 	if aptErr == nil {
 		// Step 1: apt-get update
-		session, err := client.ExecStreaming("sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", emit)
+		session, err := client.ExecStreaming("sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", nil)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()
@@ -56,7 +60,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		installCmd := "sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get install -y wireguard wireguard-tools 2>&1"
 		var installErr error
 		for attempt := 1; attempt <= 6; attempt++ {
-			session, err = client.ExecStreaming(installCmd, emit)
+			session, err = client.ExecStreaming(installCmd, nil)
 			s.mu.Lock()
 			s.session = session
 			s.mu.Unlock()
@@ -91,7 +95,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 
 	_, _, dnfErr := client.Exec("command -v dnf")
 	if dnfErr == nil {
-		session, err := client.ExecStreaming("sudo dnf install -y wireguard-tools 2>&1", emit)
+		session, err := client.ExecStreaming("sudo dnf install -y wireguard-tools 2>&1", nil)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()
@@ -108,7 +112,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 
 	_, _, yumErr := client.Exec("command -v yum")
 	if yumErr == nil {
-		session, err := client.ExecStreaming("sudo yum install -y epel-release 2>&1 && sudo yum install -y wireguard-tools 2>&1", emit)
+		session, err := client.ExecStreaming("sudo yum install -y epel-release 2>&1 && sudo yum install -y wireguard-tools 2>&1", nil)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()
@@ -125,7 +129,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 
 	_, _, pacmanErr := client.Exec("command -v pacman")
 	if pacmanErr == nil {
-		session, err := client.ExecStreaming("sudo pacman -S --noconfirm wireguard-tools 2>&1", emit)
+		session, err := client.ExecStreaming("sudo pacman -S --noconfirm wireguard-tools 2>&1", nil)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()

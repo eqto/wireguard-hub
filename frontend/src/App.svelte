@@ -7,6 +7,7 @@
   import AddPeerModal from "./lib/components/AddPeerModal.svelte";
   import InterfaceModal from "./lib/components/InterfaceModal.svelte";
   import ConfigViewer from "./lib/components/ConfigViewer.svelte";
+  import Terminal from "./lib/components/Terminal.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import {
     initTheme,
@@ -16,8 +17,8 @@
     error,
   } from "./lib/stores/servers";
   import { unwrapResponse } from "./lib/utils";
-  import * as ServerService from "../bindings/wireguardadmin/internal/server/service.js";
-  import * as WireguardService from "../bindings/wireguardadmin/internal/wireguard/service.js";
+  import * as ServerService from "../bindings/wireguardhub/internal/server/service.js";
+  import * as WireguardService from "../bindings/wireguardhub/internal/wireguard/service.js";
 
   let showAddServer = $state(false);
   let editingServer = $state<any>(null);
@@ -146,16 +147,17 @@
 </script>
 
 <div class="app-layout">
-  {#if viewMode === "sidebar"}
-    <Sidebar
-      onAddServer={handleAddServer}
-      onSelect={handleSelectServer}
-      onEditServer={handleEditServer}
-      onDeleteServer={handleDeleteServer}
-      onToggleView={toggleViewMode}
-    />
-  {/if}
-  <main class="app-main">
+  <div class="app-top">
+    {#if viewMode === "sidebar"}
+      <Sidebar
+        onAddServer={handleAddServer}
+        onSelect={handleSelectServer}
+        onEditServer={handleEditServer}
+        onDeleteServer={handleDeleteServer}
+        onToggleView={toggleViewMode}
+      />
+    {/if}
+    <main class="app-main">
     {#if viewMode === "grid"}
       {#if selected}
         <ServerDashboard
@@ -210,7 +212,9 @@
         </div>
       {/if}
     {/if}
-  </main>
+    </main>
+  </div>
+  <Terminal />
 </div>
 
 {#if showAddServer}
@@ -253,10 +257,17 @@
 <style lang="scss">
   .app-layout {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     width: 100vw;
     overflow: hidden;
     background-color: var(--bg-primary);
+  }
+
+  .app-top {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
   }
 
   .app-main {

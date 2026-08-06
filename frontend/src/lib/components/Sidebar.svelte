@@ -37,7 +37,7 @@
   <div class="sidebar-header">
     <Shield class="sidebar-icon" style="color: var(--accent);" />
     <span class="sidebar-title" style="color: var(--text-primary);"
-      >WireGuard Admin</span
+      >WireguardHub</span
     >
     <button on:click={onToggleView} class="sidebar-toggle-btn" title="Switch to grid view">
       <LayoutGrid class="icon" style="color: var(--text-secondary);" />

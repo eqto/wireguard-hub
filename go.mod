@@ -1,4 +1,4 @@
-module wireguardadmin
+module wireguardhub
 
 go 1.25.0
 

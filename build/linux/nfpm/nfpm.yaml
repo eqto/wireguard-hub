@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "wireguardadmin"
+name: "wireguardhub"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A WireguardAdmin application"
+description: "A WireguardHub application"
 vendor: "My Company"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/wireguardadmin"
-    dst: "/usr/local/bin/wireguardadmin"
+  - src: "./bin/wireguardhub"
+    dst: "/usr/local/bin/wireguardhub"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/wireguardadmin.png"
-  - src: "./build/linux/wireguardadmin.desktop"
-    dst: "/usr/share/applications/wireguardadmin.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/wireguardhub.png"
+  - src: "./build/linux/wireguardhub.desktop"
+    dst: "/usr/share/applications/wireguardhub.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

@@ -13,29 +13,29 @@ import * as models$0 from "../models/models.js";
 import * as ssh$0 from "../ssh/models.js";
 
 export function AddServer(server: models$0.ServerConfig): $CancellablePromise<models$0.ServerConfig> {
-    return $Call.ByID(625181429, server);
+    return $Call.ByID(3896640669, server);
 }
 
 export function CloseAll(): $CancellablePromise<void> {
-    return $Call.ByID(322737468);
+    return $Call.ByID(2684578068);
 }
 
 export function DeleteServer(id: string): $CancellablePromise<boolean> {
-    return $Call.ByID(4217164999, id);
+    return $Call.ByID(2028038223, id);
 }
 
 export function GetClient(serverID: string): $CancellablePromise<ssh$0.Client | null> {
-    return $Call.ByID(448703274, serverID);
+    return $Call.ByID(1502784386, serverID);
 }
 
 export function GetServers(): $CancellablePromise<models$0.ServerConfig[] | null> {
-    return $Call.ByID(1716611631);
+    return $Call.ByID(247613383);
 }
 
 export function TestConnection(server: models$0.ServerConfig): $CancellablePromise<models$0.TestConnectionResult> {
-    return $Call.ByID(82507955, server);
+    return $Call.ByID(1238645035, server);
 }
 
 export function UpdateServer(server: models$0.ServerConfig): $CancellablePromise<models$0.ServerConfig> {
-    return $Call.ByID(1778377761, server);
+    return $Call.ByID(2251486649, server);
 }

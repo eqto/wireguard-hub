@@ -4,8 +4,8 @@ import (
 	"embed"
 	"log"
 
-	"wireguardadmin/internal/server"
-	"wireguardadmin/internal/wireguard"
+	"wireguardhub/internal/server"
+	"wireguardhub/internal/wireguard"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -18,7 +18,7 @@ func main() {
 	wgSvc := wireguard.NewService(serverSvc)
 
 	app := application.New(application.Options{
-		Name:        "WireGuard Admin",
+		Name:        "WireguardHub",
 		Description: "Manage WireGuard servers over SSH",
 		Services: []application.Service{
 			application.NewService(serverSvc),
@@ -33,7 +33,7 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "WireGuard Admin",
+		Title:            "WireguardHub",
 		Width:            1200,
 		Height:           800,
 		BackgroundColour: application.NewRGB(15, 17, 28),

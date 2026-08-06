@@ -1,4 +1,4 @@
-# WireGuard Admin — Desktop App Plan
+# WireguardHub — Desktop App Plan
 
 A cross-platform desktop app built with Wails 3 (Go + Svelte) to manage multiple WireGuard servers over SSH, supporting full interface lifecycle, peer management, and dark/light themes.
 
@@ -16,7 +16,7 @@ A cross-platform desktop app built with Wails 3 (Go + Svelte) to manage multiple
 ## Project Structure
 
 ```
-WireguardAdmin/
+WireguardHub/
 ├── main.go                              # Entry point, register services, window config
 ├── internal/
 │   ├── models/models.go                 # Data structures
@@ -52,7 +52,7 @@ WireguardAdmin/
 ## Go Backend Services
 
 ### Config Store (`internal/config/store.go`)
-- Load/save server profiles to `~/.config/wireguard-admin/servers.yaml`
+- Load/save server profiles to `~/.config/wireguardhub/servers.yaml`
 - Plaintext YAML for v1 (credentials included)
 - Uses `gopkg.in/yaml.v3` for encoding/decoding
 - Uses `adrg/xdg` for cross-platform config path
@@ -149,7 +149,7 @@ type WGPeer struct {
 
 ## Config Storage
 
-- Location: `$XDG_CONFIG_HOME/wireguard-admin/servers.yaml` (e.g. `~/.config/wireguard-admin/servers.yaml`)
+- Location: `$XDG_CONFIG_HOME/wireguardhub/servers.yaml` (e.g. `~/.config/wireguardhub/servers.yaml`)
 - Format: YAML list of `ServerConfig`
 - Plaintext for v1 — encryption can be added later
 
