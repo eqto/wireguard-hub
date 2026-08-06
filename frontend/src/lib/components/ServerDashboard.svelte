@@ -40,6 +40,7 @@
   let serverInfo = $derived($servers.find((s) => s.id === serverId));
   let editingPeer = $state<any>(null);
   let editingPeerIface = $state("");
+  let wgNotInstalled = $state(false);
 
   onMount(() => {
     loadStatus();
@@ -48,6 +49,7 @@
   async function loadStatus() {
     isLoading = true;
     error.set(null);
+    wgNotInstalled = false;
     try {
       const result = await WireguardService.GetStatus(serverId);
       status = unwrapResponse(result);
@@ -57,12 +59,22 @@
         ),
       );
     } catch (e: any) {
-      servers.update((list) =>
-        list.map((s) =>
-          s.id === serverId ? { ...s, status: "offline" as const } : s,
-        ),
-      );
-      error.set(e?.message || String(e));
+      const msg = e?.message || String(e);
+      if (msg.includes("WireGuard is not installed")) {
+        wgNotInstalled = true;
+        servers.update((list) =>
+          list.map((s) =>
+            s.id === serverId ? { ...s, status: "connected" as const } : s,
+          ),
+        );
+      } else {
+        servers.update((list) =>
+          list.map((s) =>
+            s.id === serverId ? { ...s, status: "offline" as const } : s,
+          ),
+        );
+        error.set(msg);
+      }
     } finally {
       isLoading = false;
     }
@@ -175,6 +187,15 @@
         class="icon-lg spin"
         style="color: var(--accent); width: 32px; height: 32px;"
       />
+    </div>
+  {:else if wgNotInstalled}
+    <div class="dashboard-empty">
+      <p class="dashboard-empty-text" style="color: var(--text-muted);">
+        WireGuard is not installed on this server
+      </p>
+      <p class="dashboard-empty-sub" style="color: var(--text-muted); font-size: 13px;">
+        Install it with: sudo apt install wireguard
+      </p>
     </div>
   {:else if interfaces.length === 0}
     <div class="dashboard-empty">

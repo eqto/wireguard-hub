@@ -26,6 +26,11 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 
 	stdout, stderr, err := client.Exec("sudo wg show all dump")
 	if err != nil {
+		// Check if wg binary exists on the server
+		_, _, wgErr := client.Exec("command -v wg")
+		if wgErr != nil {
+			return models.WGStatus{}, fmt.Errorf("WireGuard is not installed on this server")
+		}
 		_ = stderr
 		return models.WGStatus{Interfaces: []models.WGInterface{}}, nil
 	}
