@@ -8,7 +8,7 @@
 <button
   class="theme-toggle"
   style="background-color: var(--bg-tertiary); border: 1px solid var(--border);"
-  on:click={toggleTheme}
+  onclick={toggleTheme}
   title="Toggle theme"
 >
   {#if currentTheme === "dark"}

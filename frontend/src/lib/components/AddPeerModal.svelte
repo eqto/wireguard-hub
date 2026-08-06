@@ -76,20 +76,20 @@
 
 <div
   class="modal-overlay"
-  on:click={onClose}
-  on:keydown={(e) => e.key === "Escape" && onClose()}
+  onclick={onClose}
+  onkeydown={(e) => e.key === "Escape" && onClose()}
   role="button"
   tabindex="0"
 >
   <div
     class="modal"
-    on:click={(e) => e.stopPropagation()}
+    onclick={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
     <div class="modal-header">
       <h2 class="modal-title">Add Peer to {interfaceName}</h2>
-      <button on:click={onClose} class="close-btn">
+      <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
       </button>
     </div>
@@ -104,7 +104,7 @@
             class="peer-config"
             style="background-color: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border);">{result.config}</pre>
           <button
-            on:click={copyConfig}
+            onclick={copyConfig}
             class="peer-copy-btn"
             style="background-color: var(--bg-secondary); border: 1px solid var(--border);"
             title="Copy"
@@ -117,7 +117,7 @@
           </button>
         </div>
         <div class="peer-config-footer">
-          <button on:click={onClose} class="btn btn-primary"> Done </button>
+          <button onclick={onClose} class="btn btn-primary"> Done </button>
         </div>
       </div>
     {:else}
@@ -153,7 +153,7 @@
               style="flex: 1;"
             />
             <button
-              on:click={handleGenerate}
+              onclick={handleGenerate}
               disabled={generating}
               class="btn btn-secondary"
               title="Generate keypair on server"
@@ -212,14 +212,14 @@
 
       <div class="modal-footer">
         <button
-          on:click={onClose}
+          onclick={onClose}
           class="btn-text"
           style="color: var(--text-secondary);"
         >
           Cancel
         </button>
         <button
-          on:click={handleAdd}
+          onclick={handleAdd}
           disabled={adding || !publicKey || !allowedIPs}
           class="btn btn-primary"
         >

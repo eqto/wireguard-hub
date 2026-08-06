@@ -17,21 +17,21 @@
 
 <div
   class="modal-overlay"
-  on:click={onClose}
-  on:keydown={(e) => e.key === "Escape" && onClose()}
+  onclick={onClose}
+  onkeydown={(e) => e.key === "Escape" && onClose()}
   role="button"
   tabindex="0"
 >
   <div
     class="modal modal-large"
-    on:click={(e) => e.stopPropagation()}
+    onclick={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
     <div class="modal-header">
       <h2 class="modal-title">{name}.conf</h2>
       <div class="config-header-actions">
-        <button on:click={copyContent} class="btn btn-secondary btn-small">
+        <button onclick={copyContent} class="btn btn-secondary btn-small">
           {#if copied}
             <Check class="icon" style="color: var(--success);" />
             Copied
@@ -40,7 +40,7 @@
             Copy
           {/if}
         </button>
-        <button on:click={onClose} class="close-btn">
+        <button onclick={onClose} class="close-btn">
           <X class="icon-lg" style="color: var(--text-secondary);" />
         </button>
       </div>

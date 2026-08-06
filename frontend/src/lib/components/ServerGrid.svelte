@@ -32,11 +32,11 @@
       <h1 class="server-grid-title" style="color: var(--text-primary);">
         WireguardHub
       </h1>
-      <button on:click={onToggleView} class="grid-toggle-btn" title="Switch to sidebar view">
+      <button onclick={onToggleView} class="grid-toggle-btn" title="Switch to sidebar view">
         <PanelLeft class="icon" style="color: var(--text-secondary);" />
       </button>
     </div>
-    <button on:click={onAddServer} class="btn btn-primary">
+    <button onclick={onAddServer} class="btn btn-primary">
       <Plus class="icon" />
       Add Server
     </button>
@@ -47,8 +47,8 @@
       <div
         class="server-card"
         style="background-color: var(--bg-secondary); border: 1px solid var(--border);"
-        on:click={() => onSelect(server.id)}
-        on:keydown={(e) => e.key === "Enter" && onSelect(server.id)}
+        onclick={() => onSelect(server.id)}
+        onkeydown={(e) => e.key === "Enter" && onSelect(server.id)}
         role="button"
         tabindex="0"
       >
@@ -61,7 +61,7 @@
           <div class="server-card-actions">
             <button
               class="server-card-action-btn"
-              on:click={(e) => {
+              onclick={(e) => {
                 e.stopPropagation();
                 onEditServer(server);
               }}
@@ -71,7 +71,7 @@
             </button>
             <button
               class="server-card-action-btn"
-              on:click={(e) => {
+              onclick={(e) => {
                 e.stopPropagation();
                 onDeleteServer(server.id);
               }}

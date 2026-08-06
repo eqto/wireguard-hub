@@ -39,7 +39,7 @@
     <span class="sidebar-title" style="color: var(--text-primary);"
       >WireguardHub</span
     >
-    <button on:click={onToggleView} class="sidebar-toggle-btn" title="Switch to grid view">
+    <button onclick={onToggleView} class="sidebar-toggle-btn" title="Switch to grid view">
       <LayoutGrid class="icon" style="color: var(--text-secondary);" />
     </button>
   </div>
@@ -62,8 +62,8 @@
           style={selected === server.id
             ? "background-color: var(--bg-tertiary);"
             : ""}
-          on:click={() => onSelect(server.id)}
-          on:keydown={(e) => e.key === "Enter" && onSelect(server.id)}
+          onclick={() => onSelect(server.id)}
+          onkeydown={(e) => e.key === "Enter" && onSelect(server.id)}
           role="button"
           tabindex="0"
         >
@@ -83,7 +83,7 @@
           <div class="server-actions">
             <button
               class="server-action-btn"
-              on:click={(e) => {
+              onclick={(e) => {
                 e.stopPropagation();
                 onEditServer(server);
               }}
@@ -96,7 +96,7 @@
             </button>
             <button
               class="server-action-btn"
-              on:click={(e) => {
+              onclick={(e) => {
                 e.stopPropagation();
                 onDeleteServer(server.id);
               }}
@@ -114,7 +114,7 @@
   </div>
 
   <div class="sidebar-footer" style="border-color: var(--border);">
-    <button class="add-server-btn" on:click={onAddServer}>
+    <button class="add-server-btn" onclick={onAddServer}>
       <Plus class="add-server-icon" />
       <span>Add Server</span>
     </button>

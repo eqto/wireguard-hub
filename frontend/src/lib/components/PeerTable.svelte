@@ -95,14 +95,14 @@
             <td class="peer-td peer-td-right">
               <div class="peer-actions">
                 <button
-                  on:click={() => onEdit(peer)}
+                  onclick={() => onEdit(peer)}
                   class="peer-remove-btn"
                   title="Edit peer metadata"
                 >
                   <Pencil class="icon-sm" style="color: var(--text-secondary);" />
                 </button>
                 <button
-                  on:click={() => onRemove(peer.publicKey)}
+                  onclick={() => onRemove(peer.publicKey)}
                   class="peer-remove-btn"
                   title="Remove peer"
                 >

@@ -46,20 +46,20 @@
 
 <div
   class="modal-overlay"
-  on:click={onClose}
-  on:keydown={(e) => e.key === "Escape" && onClose()}
+  onclick={onClose}
+  onkeydown={(e) => e.key === "Escape" && onClose()}
   role="button"
   tabindex="0"
 >
   <div
     class="modal"
-    on:click={(e) => e.stopPropagation()}
+    onclick={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
     <div class="modal-header">
       <h2 class="modal-title">Edit Peer</h2>
-      <button on:click={onClose} class="close-btn">
+      <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
       </button>
     </div>
@@ -93,14 +93,14 @@
 
     <div class="modal-footer">
       <button
-        on:click={onClose}
+        onclick={onClose}
         class="btn-text"
         style="color: var(--text-secondary);"
       >
         Cancel
       </button>
       <button
-        on:click={handleSave}
+        onclick={handleSave}
         disabled={saving}
         class="btn btn-primary"
       >

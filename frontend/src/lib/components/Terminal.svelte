@@ -7,41 +7,30 @@
     terminalExpanded,
     addEntry,
     clearServer,
-    toggleTerminal,
-    type TerminalEntry,
   } from "../stores/terminal";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import ChevronUp from "@lucide/svelte/icons/chevron-up";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import TerminalIcon from "@lucide/svelte/icons/terminal";
 
-  let terminalBody: HTMLDivElement | null = null;
-
-  let entries = $derived($terminalEntries);
-  let expanded = $derived($terminalExpanded);
-  let selected = $derived($selectedServerId);
-  let serverInfo = $derived($servers.find((s) => s.id === selected));
-  let currentEntries = $derived(selected ? entries[selected] || [] : []);
+  let terminalBody: HTMLDivElement | null = $state(null);
+  let expanded = $state(true);
 
   let offTerminal: (() => void) | null = null;
 
   onMount(() => {
-    console.log("[Terminal] registering ssh-terminal event listener");
     offTerminal = Events.On("ssh-terminal", (event: any) => {
-      console.log("[Terminal] received ssh-terminal event:", JSON.stringify(event));
       const data = event.data;
       if (!data || !data.serverId) {
-        console.log("[Terminal] skipping event: missing data or serverId", data);
         return;
       }
-      const entry: TerminalEntry = {
+      addEntry(data.serverId, {
         kind: data.kind,
         command: data.command,
         line: data.line,
         error: data.error,
         timestamp: Date.now(),
-      };
-      addEntry(data.serverId, entry);
+      });
     });
   });
 
@@ -50,21 +39,28 @@
   });
 
   $effect(() => {
+    // Track entries length so auto-scroll fires on new output
+    const entryCount = $selectedServerId ? ($terminalEntries[$selectedServerId] || []).length : 0;
     if (expanded && terminalBody) {
       terminalBody.scrollTop = terminalBody.scrollHeight;
     }
   });
 
+  function handleToggle() {
+    expanded = !expanded;
+    terminalExpanded.set(expanded);
+  }
+
   function handleClear() {
-    if (selected) {
-      clearServer(selected);
+    if ($selectedServerId) {
+      clearServer($selectedServerId);
     }
   }
 </script>
 
-<div class="terminal-panel" class:collapsed={!expanded}>
+<div class="terminal-panel" style="height: {expanded ? '250px' : '34px'}; min-height: {expanded ? '250px' : '34px'};">
   <div class="terminal-header">
-    <button class="terminal-toggle" on:click={toggleTerminal} title={expanded ? "Collapse" : "Expand"}>
+    <button class="terminal-toggle" onclick={handleToggle} title={expanded ? "Collapse" : "Expand"}>
       {#if expanded}
         <ChevronDown class="icon-sm" style="color: var(--text-secondary);" />
       {:else}
@@ -72,16 +68,16 @@
       {/if}
       <TerminalIcon class="icon-sm" style="color: var(--text-secondary);" />
       <span class="terminal-label" style="color: var(--text-secondary);">
-        Terminal{#if serverInfo} — {serverInfo.name}{/if}
+        Terminal{#if $servers.find((s) => s.id === $selectedServerId)} — {$servers.find((s) => s.id === $selectedServerId).name}{/if}
       </span>
-      {#if currentEntries.length > 0}
+      {#if $selectedServerId && ($terminalEntries[$selectedServerId] || []).length > 0}
         <span class="terminal-count" style="color: var(--text-muted);">
-          ({currentEntries.length})
+          ({($terminalEntries[$selectedServerId] || []).length})
         </span>
       {/if}
     </button>
-    {#if expanded && selected}
-      <button class="terminal-clear-btn" on:click={handleClear} title="Clear terminal">
+    {#if expanded && $selectedServerId}
+      <button class="terminal-clear-btn" onclick={handleClear} title="Clear terminal">
         <Trash2 class="icon-sm" style="color: var(--text-muted);" />
       </button>
     {/if}
@@ -89,31 +85,31 @@
 
   {#if expanded}
     <div class="terminal-body" bind:this={terminalBody}>
-      {#if !selected}
-        <div class="terminal-empty" style="color: var(--text-muted);">
-          Select a server to view its terminal output.
-        </div>
-      {:else if currentEntries.length === 0}
-        <div class="terminal-empty" style="color: var(--text-muted);">
-          No commands executed yet.
-        </div>
-      {:else}
-        {#each currentEntries as entry (entry.timestamp)}
-          {#if entry.kind === "command"}
-            <div class="terminal-line terminal-command">
-              <span class="terminal-prompt">$</span>
-              <span>{entry.command}</span>
-            </div>
-          {:else if entry.kind === "output"}
-            <div class="terminal-line terminal-output">{entry.line}</div>
-          {:else if entry.kind === "done"}
-            {#if entry.error}
-              <div class="terminal-line terminal-error">Error: {entry.error}</div>
-            {/if}
+    {#if !$selectedServerId}
+      <div class="terminal-empty" style="color: var(--text-muted);">
+        Select a server to view its terminal output.
+      </div>
+    {:else if ($terminalEntries[$selectedServerId] || []).length === 0}
+      <div class="terminal-empty" style="color: var(--text-muted);">
+        No commands executed yet.
+      </div>
+    {:else}
+      {#each $terminalEntries[$selectedServerId] || [] as entry (entry.id)}
+        {#if entry.kind === "command"}
+          <div class="terminal-line terminal-command">
+            <span class="terminal-prompt">$</span>
+            <span>{entry.command}</span>
+          </div>
+        {:else if entry.kind === "output"}
+          <div class="terminal-line terminal-output">{entry.line}</div>
+        {:else if entry.kind === "done"}
+          {#if entry.error}
+            <div class="terminal-line terminal-error">Error: {entry.error}</div>
           {/if}
-        {/each}
-      {/if}
-    </div>
+        {/if}
+      {/each}
+    {/if}
+  </div>
   {/if}
 </div>
 
@@ -123,14 +119,7 @@
     flex-direction: column;
     border-top: 1px solid var(--border);
     background-color: #0c0c0c;
-    height: 250px;
-    min-height: 250px;
     flex-shrink: 0;
-
-    &.collapsed {
-      height: 34px;
-      min-height: 34px;
-    }
   }
 
   .terminal-header {
@@ -153,6 +142,12 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+    &:hover {
+      background-color: var(--bg-secondary);
+    }
   }
 
   .terminal-label {

@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store'
 
 export interface TerminalEntry {
+  id: number
   kind: 'command' | 'output' | 'done'
   command?: string
   line?: string
@@ -11,12 +12,14 @@ export interface TerminalEntry {
 export const terminalEntries = writable<Record<string, TerminalEntry[]>>({})
 export const terminalExpanded = writable<boolean>(true)
 
-export function addEntry(serverId: string, entry: TerminalEntry) {
+let nextEntryId = 0
+
+export function addEntry(serverId: string, entry: Omit<TerminalEntry, 'id'>) {
   terminalEntries.update((all) => {
     const list = all[serverId] || []
     return {
       ...all,
-      [serverId]: [...list, entry],
+      [serverId]: [...list, { ...entry, id: nextEntryId++ }],
     }
   })
 }

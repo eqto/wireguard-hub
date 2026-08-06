@@ -182,7 +182,7 @@
     <div class="dashboard-header">
       <div class="dashboard-title-row">
         {#if onBack}
-          <button on:click={onBack} class="btn-icon back-btn" title="Back to servers">
+          <button onclick={onBack} class="btn-icon back-btn" title="Back to servers">
             <ArrowLeft class="icon" style="color: var(--text-secondary);" />
           </button>
         {/if}
@@ -217,7 +217,7 @@
           </div>
         {/if}
         <button
-          on:click={loadStatus}
+          onclick={loadStatus}
           disabled={isLoading}
           class="btn btn-secondary"
         >
@@ -229,14 +229,14 @@
           Refresh
         </button>
         <button
-          on:click={() => onEditServer(serverInfo)}
+          onclick={() => onEditServer(serverInfo)}
           class="btn-icon"
           title="Edit server"
         >
           <Pencil class="icon" style="color: var(--text-secondary);" />
         </button>
         <button
-          on:click={() => onDeleteServer(serverInfo.id)}
+          onclick={() => onDeleteServer(serverInfo.id)}
           class="btn-icon"
           title="Delete server"
         >
@@ -263,7 +263,7 @@
         <p class="dashboard-empty-text" style="color: var(--text-muted);">
           Installing WireGuard... Check terminal for output.
         </p>
-        <button on:click={handleCancelInstall} class="btn btn-secondary">
+        <button onclick={handleCancelInstall} class="btn btn-secondary">
           <Square class="icon-sm" />
           Cancel
         </button>
@@ -271,7 +271,7 @@
         <p class="dashboard-empty-text" style="color: var(--text-muted);">
           Installation failed or cancelled. Check terminal for details.
         </p>
-        <button on:click={handleInstallWG} class="btn btn-primary">
+        <button onclick={handleInstallWG} class="btn btn-primary">
           <Download class="icon" />
           Retry Install
         </button>
@@ -279,7 +279,7 @@
         <p class="dashboard-empty-text" style="color: var(--text-muted);">
           WireGuard is not installed on this server
         </p>
-        <button on:click={handleInstallWG} class="btn btn-primary">
+        <button onclick={handleInstallWG} class="btn btn-primary">
           <Download class="icon" />
           Install WireGuard
         </button>
@@ -290,14 +290,14 @@
       <p class="dashboard-empty-text" style="color: var(--text-muted);">
         No WireGuard interfaces found
       </p>
-      <button on:click={onCreateInterface} class="btn btn-primary">
+      <button onclick={onCreateInterface} class="btn btn-primary">
         <Plus class="icon" />
         Create Interface
       </button>
     </div>
   {:else}
     <div class="dashboard-toolbar">
-      <button on:click={onCreateInterface} class="btn btn-primary">
+      <button onclick={onCreateInterface} class="btn btn-primary">
         <Plus class="icon" />
         Create Interface
       </button>
@@ -322,28 +322,28 @@
           </div>
           <div class="interface-actions">
             <button
-              on:click={() => onAddPeer(iface.name)}
+              onclick={() => onAddPeer(iface.name)}
               class="btn btn-primary btn-small"
             >
               <Plus class="icon-sm" />
               Add Peer
             </button>
             <button
-              on:click={() => handleViewConfig(iface.name)}
+              onclick={() => handleViewConfig(iface.name)}
               class="btn-icon btn-icon-small"
               title="View Config"
             >
               <FileText class="icon" style="color: var(--text-secondary);" />
             </button>
             <button
-              on:click={() => handleSyncConfig(iface.name)}
+              onclick={() => handleSyncConfig(iface.name)}
               class="btn-icon btn-icon-small"
               title="Sync Config"
             >
               <Sync class="icon" style="color: var(--text-secondary);" />
             </button>
             <button
-              on:click={() => handleDeleteInterface(iface.name)}
+              onclick={() => handleDeleteInterface(iface.name)}
               class="btn-icon btn-icon-small"
               title="Delete Interface"
             >

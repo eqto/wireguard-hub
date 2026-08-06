@@ -59,20 +59,20 @@
 
 <div
   class="modal-overlay"
-  on:click={onClose}
-  on:keydown={(e) => e.key === "Escape" && onClose()}
+  onclick={onClose}
+  onkeydown={(e) => e.key === "Escape" && onClose()}
   role="button"
   tabindex="0"
 >
   <div
     class="modal"
-    on:click={(e) => e.stopPropagation()}
+    onclick={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
     <div class="modal-header">
       <h2 class="modal-title">Create Interface</h2>
-      <button on:click={onClose} class="close-btn">
+      <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
       </button>
     </div>
@@ -120,7 +120,7 @@
             style="flex: 1;"
           />
           <button
-            on:click={handleGenerate}
+            onclick={handleGenerate}
             disabled={generating}
             class="btn btn-secondary"
             title="Generate keypair on server"
@@ -148,14 +148,14 @@
 
     <div class="modal-footer">
       <button
-        on:click={onClose}
+        onclick={onClose}
         class="btn-text"
         style="color: var(--text-secondary);"
       >
         Cancel
       </button>
       <button
-        on:click={handleCreate}
+        onclick={handleCreate}
         disabled={creating || !name || !listenPort}
         class="btn btn-primary"
       >
