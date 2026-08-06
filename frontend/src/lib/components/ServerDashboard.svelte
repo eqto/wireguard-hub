@@ -14,6 +14,7 @@
   import FileText from "@lucide/svelte/icons/file-text";
   import Sync from "@lucide/svelte/icons/refresh-ccw";
   import Loader2 from "@lucide/svelte/icons/loader-2";
+  import Download from "@lucide/svelte/icons/download";
 
   let {
     serverId,
@@ -41,6 +42,7 @@
   let editingPeer = $state<any>(null);
   let editingPeerIface = $state("");
   let wgNotInstalled = $state(false);
+  let installing = $state(false);
 
   onMount(() => {
     loadStatus();
@@ -53,28 +55,19 @@
     try {
       const result = await WireguardService.GetStatus(serverId);
       status = unwrapResponse(result);
+      wgNotInstalled = status?.wgNotInstalled ?? false;
       servers.update((list) =>
         list.map((s) =>
           s.id === serverId ? { ...s, status: "connected" as const } : s,
         ),
       );
     } catch (e: any) {
-      const msg = e?.message || String(e);
-      if (msg.includes("WireGuard is not installed")) {
-        wgNotInstalled = true;
-        servers.update((list) =>
-          list.map((s) =>
-            s.id === serverId ? { ...s, status: "connected" as const } : s,
-          ),
-        );
-      } else {
-        servers.update((list) =>
-          list.map((s) =>
-            s.id === serverId ? { ...s, status: "offline" as const } : s,
-          ),
-        );
-        error.set(msg);
-      }
+      servers.update((list) =>
+        list.map((s) =>
+          s.id === serverId ? { ...s, status: "offline" as const } : s,
+        ),
+      );
+      error.set(e?.message || String(e));
     } finally {
       isLoading = false;
     }
@@ -128,6 +121,18 @@
     editingPeer = peer;
   }
 
+  async function handleInstallWG() {
+    installing = true;
+    try {
+      await WireguardService.InstallWireGuard(serverId);
+      await loadStatus();
+    } catch (e: any) {
+      error.set(e?.message || String(e));
+    } finally {
+      installing = false;
+    }
+  }
+
   let interfaces = $derived(status?.interfaces || []);
 </script>
 
@@ -151,13 +156,20 @@
         <StatusBadge status={serverInfo.status} />
       </div>
       <div class="dashboard-actions">
-        {#if status?.hostname}
+        {#if status}
           <div class="server-endpoint">
-            <span class="server-endpoint-name" style="color: var(--text-primary);">
-              {status.hostname}
-            </span>
+            {#if status?.os}
+              <span class="server-endpoint-line" style="color: var(--text-secondary);">
+                {status.os}
+              </span>
+            {/if}
+            {#if status?.hostname}
+              <span class="server-endpoint-line" style="color: var(--text-secondary);">
+                {status.hostname}
+              </span>
+            {/if}
             {#if status?.serverIP}
-              <span class="server-endpoint-ip" style="color: var(--text-muted);">
+              <span class="server-endpoint-line" style="color: var(--text-muted);">
                 {status.serverIP}
               </span>
             {/if}
@@ -205,9 +217,15 @@
       <p class="dashboard-empty-text" style="color: var(--text-muted);">
         WireGuard is not installed on this server
       </p>
-      <p class="dashboard-empty-sub" style="color: var(--text-muted); font-size: 13px;">
-        Install it with: sudo apt install wireguard
-      </p>
+      <button on:click={handleInstallWG} disabled={installing} class="btn btn-primary">
+        {#if installing}
+          <Loader2 class="icon spin" />
+          Installing...
+        {:else}
+          <Download class="icon" />
+          Install WireGuard
+        {/if}
+      </button>
     </div>
   {:else if interfaces.length === 0}
     <div class="dashboard-empty">
@@ -472,14 +490,8 @@
     margin-right: auto;
   }
 
-  .server-endpoint-name {
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.2;
-  }
-
-  .server-endpoint-ip {
-    font-size: 12px;
-    line-height: 1.2;
+  .server-endpoint-line {
+    font-size: 13px;
+    line-height: 1.3;
   }
 </style>

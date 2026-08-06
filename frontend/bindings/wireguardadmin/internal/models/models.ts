@@ -87,4 +87,7 @@ export interface WGStatus {
     "interfaces": WGInterface[] | null;
     "hostname"?: string;
     "serverIP"?: string;
+    "os"?: string;
+    "packageManager"?: string;
+    "wgNotInstalled"?: boolean;
 }

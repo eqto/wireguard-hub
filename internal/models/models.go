@@ -40,9 +40,12 @@ type WGPeer struct {
 }
 
 type WGStatus struct {
-	Interfaces []WGInterface `yaml:"interfaces" json:"interfaces"`
-	Hostname   string        `yaml:"hostname,omitempty" json:"hostname,omitempty"`
-	ServerIP   string        `yaml:"serverIP,omitempty" json:"serverIP,omitempty"`
+	Interfaces     []WGInterface `yaml:"interfaces" json:"interfaces"`
+	Hostname       string        `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	ServerIP       string        `yaml:"serverIP,omitempty" json:"serverIP,omitempty"`
+	OS             string        `yaml:"os,omitempty" json:"os,omitempty"`
+	PackageManager string        `yaml:"packageManager,omitempty" json:"packageManager,omitempty"`
+	WGNotInstalled bool          `yaml:"wgNotInstalled,omitempty" json:"wgNotInstalled,omitempty"`
 }
 
 type AddPeerRequest struct {

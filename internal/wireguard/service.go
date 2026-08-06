@@ -8,6 +8,7 @@ import (
 
 	"wireguardadmin/internal/models"
 	"wireguardadmin/internal/server"
+	"wireguardadmin/internal/ssh"
 )
 
 type Service struct {
@@ -16,6 +17,52 @@ type Service struct {
 
 func NewService(serverSvc *server.Service) *Service {
 	return &Service{serverSvc: serverSvc}
+}
+
+func (s *Service) InstallWireGuard(serverID string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+
+	// Detect package manager and install
+	_, _, aptErr := client.Exec("command -v apt-get")
+	if aptErr == nil {
+		_, stderr, err := client.Exec("sudo apt-get update -y && sudo apt-get install -y wireguard wireguard-tools")
+		if err != nil {
+			return false, fmt.Errorf("apt install failed: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
+	_, _, dnfErr := client.Exec("command -v dnf")
+	if dnfErr == nil {
+		_, stderr, err := client.Exec("sudo dnf install -y wireguard-tools")
+		if err != nil {
+			return false, fmt.Errorf("dnf install failed: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
+	_, _, yumErr := client.Exec("command -v yum")
+	if yumErr == nil {
+		_, stderr, err := client.Exec("sudo yum install -y epel-release && sudo yum install -y wireguard-tools")
+		if err != nil {
+			return false, fmt.Errorf("yum install failed: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
+	_, _, pacmanErr := client.Exec("command -v pacman")
+	if pacmanErr == nil {
+		_, stderr, err := client.Exec("sudo pacman -S --noconfirm wireguard-tools")
+		if err != nil {
+			return false, fmt.Errorf("pacman install failed: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
+	return false, fmt.Errorf("no supported package manager found (apt/dnf/yum/pacman)")
 }
 
 func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
@@ -29,10 +76,17 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		// Check if wg binary exists on the server
 		_, _, wgErr := client.Exec("command -v wg")
 		if wgErr != nil {
-			return models.WGStatus{}, fmt.Errorf("WireGuard is not installed on this server")
+			status := models.WGStatus{
+				Interfaces:     []models.WGInterface{},
+				WGNotInstalled: true,
+			}
+			fillServerInfo(client, &status)
+			return status, nil
 		}
 		_ = stderr
-		return models.WGStatus{Interfaces: []models.WGInterface{}}, nil
+		status := models.WGStatus{Interfaces: []models.WGInterface{}}
+		fillServerInfo(client, &status)
+		return status, nil
 	}
 
 	status := parseWGDump(stdout)
@@ -52,13 +106,35 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		}
 	}
 
+	fillServerInfo(client, &status)
+
+	return status, nil
+}
+
+func fillServerInfo(client *ssh.Client, status *models.WGStatus) {
 	hostname, _, _ := client.Exec("hostname")
 	status.Hostname = strings.TrimSpace(hostname)
 
 	serverIP, _, _ := client.Exec("hostname -I | awk '{print $1}'")
 	status.ServerIP = strings.TrimSpace(serverIP)
 
-	return status, nil
+	osRelease, _, _ := client.Exec("cat /etc/os-release")
+	for _, line := range strings.Split(osRelease, "\n") {
+		if strings.HasPrefix(line, "PRETTY_NAME=") {
+			status.OS = strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), "\"")
+			break
+		}
+	}
+
+	if _, _, err := client.Exec("command -v apt-get"); err == nil {
+		status.PackageManager = "apt"
+	} else if _, _, err := client.Exec("command -v dnf"); err == nil {
+		status.PackageManager = "dnf"
+	} else if _, _, err := client.Exec("command -v yum"); err == nil {
+		status.PackageManager = "yum"
+	} else if _, _, err := client.Exec("command -v pacman"); err == nil {
+		status.PackageManager = "pacman"
+	}
 }
 
 func parseWGDump(output string) models.WGStatus {

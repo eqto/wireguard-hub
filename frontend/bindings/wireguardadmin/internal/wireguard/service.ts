@@ -33,6 +33,10 @@ export function GetStatus(serverID: string): $CancellablePromise<models$0.WGStat
     return $Call.ByID(552800524, serverID);
 }
 
+export function InstallWireGuard(serverID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(764955237, serverID);
+}
+
 export function RemovePeer(serverID: string, iface: string, publicKey: string): $CancellablePromise<boolean> {
     return $Call.ByID(312014626, serverID, iface, publicKey);
 }
