@@ -30,6 +30,22 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 	}
 
 	status := parseWGDump(stdout)
+
+	// Merge peer metadata from config files on the server.
+	for i := range status.Interfaces {
+		confStdout, _, confErr := client.Exec(fmt.Sprintf("sudo cat /etc/wireguard/%s.conf", status.Interfaces[i].Name))
+		if confErr != nil {
+			continue
+		}
+		metaMap := parsePeerMeta(confStdout)
+		for j := range status.Interfaces[i].Peers {
+			if meta, ok := metaMap[status.Interfaces[i].Peers[j].PublicKey]; ok {
+				status.Interfaces[i].Peers[j].Name = meta.Name
+				status.Interfaces[i].Peers[j].Description = meta.Description
+			}
+		}
+	}
+
 	return status, nil
 }
 
@@ -111,6 +127,59 @@ func parseWGDump(output string) models.WGStatus {
 	}
 
 	return status
+}
+
+// parsePeerMeta parses a WireGuard config file and extracts # Name and # Description
+// comments from each [Peer] section, keyed by the peer's public key.
+func parsePeerMeta(configText string) map[string]models.WGPeer {
+	result := make(map[string]models.WGPeer)
+	lines := strings.Split(configText, "\n")
+
+	var currentPubKey string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "[Peer]" {
+			currentPubKey = ""
+			continue
+		}
+
+		if currentPubKey != "" || strings.HasPrefix(trimmed, "# Name") || strings.HasPrefix(trimmed, "# Description") {
+			// Check for PublicKey to associate metadata
+			if strings.HasPrefix(trimmed, "PublicKey") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 {
+					currentPubKey = strings.TrimSpace(parts[1])
+					if _, ok := result[currentPubKey]; !ok {
+						result[currentPubKey] = models.WGPeer{PublicKey: currentPubKey}
+					}
+				}
+				continue
+			}
+
+			if strings.HasPrefix(trimmed, "# Name") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 && currentPubKey != "" {
+					p := result[currentPubKey]
+					p.Name = strings.TrimSpace(parts[1])
+					result[currentPubKey] = p
+				}
+				continue
+			}
+
+			if strings.HasPrefix(trimmed, "# Description") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 && currentPubKey != "" {
+					p := result[currentPubKey]
+					p.Description = strings.TrimSpace(parts[1])
+					result[currentPubKey] = p
+				}
+				continue
+			}
+		}
+	}
+
+	return result
 }
 
 func parseTimestamp(s string) time.Time {
@@ -294,6 +363,36 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 
 	s.SyncConfig(req.ServerID, req.Interface)
 
+	// Append the [Peer] section to the config file for persistence across reboots.
+	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Interface)
+	existingConf, _, _ := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
+
+	var peerSection strings.Builder
+	peerSection.WriteString("\n[Peer]\n")
+	peerSection.WriteString(fmt.Sprintf("PublicKey = %s\n", pubKey))
+	if req.Name != "" {
+		peerSection.WriteString(fmt.Sprintf("# Name = %s\n", req.Name))
+	}
+	if req.Description != "" {
+		peerSection.WriteString(fmt.Sprintf("# Description = %s\n", req.Description))
+	}
+	peerSection.WriteString(fmt.Sprintf("AllowedIPs = %s\n", strings.Join(req.AllowedIPs, ",")))
+	if req.PresharedKey != "" {
+		peerSection.WriteString(fmt.Sprintf("PresharedKey = %s\n", req.PresharedKey))
+	}
+	if req.Endpoint != "" {
+		peerSection.WriteString(fmt.Sprintf("Endpoint = %s\n", req.Endpoint))
+	}
+	if req.PersistentKeepalive > 0 {
+		peerSection.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", req.PersistentKeepalive))
+	}
+
+	updatedConf := strings.TrimRight(existingConf, "\n") + "\n" + peerSection.String()
+	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	if err != nil {
+		return models.AddPeerResult{}, fmt.Errorf("failed to update config file: %s: %w", stderr, err)
+	}
+
 	serverIP, _, _ := client.Exec(fmt.Sprintf("sudo wg show %s listen-port | head -1 && hostname -I | awk '{print $1}'", req.Interface))
 
 	clientConfig := generateClientConfig(privKey, pubKey, req, serverIP)
@@ -340,5 +439,179 @@ func (s *Service) RemovePeer(serverID string, iface string, publicKey string) (b
 
 	s.SyncConfig(serverID, iface)
 
+	// Remove the [Peer] section from the config file.
+	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
+	existingConf, _, _ := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
+	updatedConf := removePeerSection(existingConf, publicKey)
+	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	if err != nil {
+		return false, fmt.Errorf("failed to update config file: %s: %w", stderr, err)
+	}
+
 	return true, nil
+}
+
+func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error) {
+	client, err := s.serverSvc.GetClient(req.ServerID)
+	if err != nil {
+		return false, err
+	}
+
+	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Interface)
+	existingConf, stderr, err := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
+	if err != nil {
+		return false, fmt.Errorf("failed to read config: %s: %w", stderr, err)
+	}
+
+	updatedConf := updatePeerMetaInConfig(existingConf, req.PublicKey, req.Name, req.Description)
+	if updatedConf == "" {
+		return false, fmt.Errorf("peer not found in config: %s", req.PublicKey)
+	}
+
+	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	if err != nil {
+		return false, fmt.Errorf("failed to write config: %s: %w", stderr, err)
+	}
+
+	return true, nil
+}
+
+// removePeerSection removes the [Peer] section matching the given public key from the config text.
+func removePeerSection(configText string, publicKey string) string {
+	lines := strings.Split(configText, "\n")
+	var result []string
+
+	inPeerSection := false
+	skipSection := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "[Peer]" {
+			inPeerSection = true
+			skipSection = false
+			// Look ahead: we need to buffer lines until we find the PublicKey
+			// We'll add the [Peer] line tentatively and remove later if it matches
+			result = append(result, line)
+			continue
+		}
+
+		if trimmed == "[Interface]" {
+			inPeerSection = false
+			skipSection = false
+			result = append(result, line)
+			continue
+		}
+
+		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
+				// Remove the buffered [Peer] line and skip this entire section
+				result = result[:len(result)-1] // remove the "[Peer]" line we added
+				skipSection = true
+				continue
+			}
+		}
+
+		if skipSection {
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// updatePeerMetaInConfig adds or updates # Name and # Description comments in the
+// [Peer] section matching the given public key. Returns empty string if peer not found.
+func updatePeerMetaInConfig(configText string, publicKey string, name string, description string) string {
+	lines := strings.Split(configText, "\n")
+
+	inPeerSection := false
+	foundPeer := false
+	pubKeyLineIdx := -1
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "[Peer]" {
+			inPeerSection = true
+			foundPeer = false
+			pubKeyLineIdx = -1
+			continue
+		}
+
+		if trimmed == "[Interface]" {
+			inPeerSection = false
+			continue
+		}
+
+		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
+				foundPeer = true
+				pubKeyLineIdx = i
+			}
+		}
+	}
+
+	if !foundPeer || pubKeyLineIdx == -1 {
+		return ""
+	}
+
+	// Find the extent of this peer's metadata comments (Name/Description right after PublicKey)
+	// and also find where the next non-comment, non-empty line is (end of metadata zone).
+	hasName := false
+	hasDescription := false
+	nameLineIdx := -1
+	descLineIdx := -1
+
+	for i := pubKeyLineIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(trimmed, "# Name") {
+			hasName = true
+			nameLineIdx = i
+		} else if strings.HasPrefix(trimmed, "# Description") {
+			hasDescription = true
+			descLineIdx = i
+		} else if strings.HasPrefix(trimmed, "#") || trimmed == "" {
+			continue
+		} else {
+			break
+		}
+	}
+
+	// Build replacement lines for metadata
+	var metaLines []string
+	if name != "" {
+		metaLines = append(metaLines, fmt.Sprintf("# Name = %s", name))
+	}
+	if description != "" {
+		metaLines = append(metaLines, fmt.Sprintf("# Description = %s", description))
+	}
+
+	// Determine the range to replace
+	startIdx := pubKeyLineIdx + 1
+	endIdx := pubKeyLineIdx // exclusive end, nothing to remove by default
+
+	// Find the range of existing Name/Description comments
+	if hasName && hasDescription {
+		startIdx = min(nameLineIdx, descLineIdx)
+		endIdx = max(nameLineIdx, descLineIdx) + 1
+	} else if hasName {
+		startIdx = nameLineIdx
+		endIdx = nameLineIdx + 1
+	} else if hasDescription {
+		startIdx = descLineIdx
+		endIdx = descLineIdx + 1
+	}
+
+	// Replace the range with new metadata lines
+	var newLines []string
+	newLines = append(newLines, lines[:startIdx]...)
+	newLines = append(newLines, metaLines...)
+	newLines = append(newLines, lines[endIdx:]...)
+
+	return strings.Join(newLines, "\n")
 }

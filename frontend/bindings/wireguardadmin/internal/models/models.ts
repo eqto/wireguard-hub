@@ -9,6 +9,8 @@ export interface AddPeerRequest {
     "presharedKey"?: string;
     "endpoint"?: string;
     "persistentKeepalive"?: number;
+    "name"?: string;
+    "description"?: string;
 }
 
 export interface AddPeerResult {
@@ -49,6 +51,14 @@ export interface TestConnectionResult {
     "message": string;
 }
 
+export interface UpdatePeerMetaRequest {
+    "serverId": string;
+    "interface": string;
+    "publicKey": string;
+    "name"?: string;
+    "description"?: string;
+}
+
 export interface WGInterface {
     "name": string;
     "publicKey": string;
@@ -69,6 +79,8 @@ export interface WGPeer {
     "rxBytes": number;
     "txBytes": number;
     "persistentKeepalive"?: number;
+    "name"?: string;
+    "description"?: string;
 }
 
 export interface WGStatus {

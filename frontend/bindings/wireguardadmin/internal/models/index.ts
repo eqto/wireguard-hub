@@ -8,6 +8,7 @@ export type {
     KeyPair,
     ServerConfig,
     TestConnectionResult,
+    UpdatePeerMetaRequest,
     WGInterface,
     WGPeer,
     WGStatus

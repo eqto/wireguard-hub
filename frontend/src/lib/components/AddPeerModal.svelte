@@ -19,6 +19,8 @@
   let presharedKey = $state("");
   let endpoint = $state("");
   let persistentKeepalive = $state(0);
+  let peerName = $state("");
+  let peerDescription = $state("");
   let generating = $state(false);
   let adding = $state(false);
   let result = $state<{ publicKey: string; config: string } | null>(null);
@@ -51,6 +53,8 @@
         presharedKey: presharedKey,
         endpoint: endpoint,
         persistentKeepalive: Number(persistentKeepalive),
+        name: peerName,
+        description: peerDescription,
       };
       const res = await WireguardService.AddPeer(req);
       result = unwrapResponse(res);
@@ -118,6 +122,26 @@
       </div>
     {:else}
       <div class="modal-body">
+        <div class="form-group">
+          <label class="label">Name (optional)</label>
+          <input
+            bind:value={peerName}
+            type="text"
+            placeholder="e.g. Alice's laptop"
+            class="input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="label">Description (optional)</label>
+          <input
+            bind:value={peerDescription}
+            type="text"
+            placeholder="e.g. Work laptop for remote access"
+            class="input"
+          />
+        </div>
+
         <div class="form-group">
           <label class="label">Public Key</label>
           <div class="input-row">

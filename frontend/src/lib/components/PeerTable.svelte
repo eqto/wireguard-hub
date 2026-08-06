@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Trash2 } from "@lucide/svelte";
+  import { Trash2, Pencil } from "@lucide/svelte";
   import { formatBytes, formatRelativeTime, truncateKey } from "../utils";
 
   let {
     peers,
     onRemove,
-  }: { peers: any[]; onRemove: (pubKey: string) => void } = $props();
+    onEdit,
+  }: { peers: any[]; onRemove: (pubKey: string) => void; onEdit: (peer: any) => void } = $props();
 </script>
 
 {#if peers.length === 0}
@@ -21,6 +22,7 @@
         <tr
           style="background-color: var(--bg-tertiary); border-bottom: 1px solid var(--border);"
         >
+          <th class="peer-th" style="color: var(--text-secondary);">Name</th>
           <th class="peer-th" style="color: var(--text-secondary);"
             >Public Key</th
           >
@@ -46,6 +48,13 @@
       <tbody>
         {#each peers as peer (peer.publicKey)}
           <tr class="peer-tr" style="border-bottom: 1px solid var(--border);">
+            <td
+              class="peer-td"
+              style="color: var(--text-primary);"
+              title={peer.description || ""}
+            >
+              {peer.name || truncateKey(peer.publicKey, 12)}
+            </td>
             <td
               class="peer-td peer-td-mono"
               style="color: var(--text-secondary);"
@@ -84,13 +93,22 @@
               {formatBytes(peer.txBytes)}
             </td>
             <td class="peer-td peer-td-right">
-              <button
-                on:click={() => onRemove(peer.publicKey)}
-                class="peer-remove-btn"
-                title="Remove peer"
-              >
-                <Trash2 class="icon-sm" style="color: var(--danger);" />
-              </button>
+              <div class="peer-actions">
+                <button
+                  on:click={() => onEdit(peer)}
+                  class="peer-remove-btn"
+                  title="Edit peer metadata"
+                >
+                  <Pencil class="icon-sm" style="color: var(--text-secondary);" />
+                </button>
+                <button
+                  on:click={() => onRemove(peer.publicKey)}
+                  class="peer-remove-btn"
+                  title="Remove peer"
+                >
+                  <Trash2 class="icon-sm" style="color: var(--danger);" />
+                </button>
+              </div>
             </td>
           </tr>
         {/each}
@@ -149,6 +167,12 @@
         text-align: right;
       }
     }
+  }
+
+  .peer-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
   }
 
   .peer-remove-btn {

@@ -5,6 +5,7 @@
   import { formatBytes, unwrapResponse } from "../utils";
   import StatusBadge from "./StatusBadge.svelte";
   import PeerTable from "./PeerTable.svelte";
+  import EditPeerModal from "./EditPeerModal.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -34,6 +35,8 @@
   let status = $state<any>(null);
   let isLoading = $state(false);
   let serverInfo = $derived($servers.find((s) => s.id === serverId));
+  let editingPeer = $state<any>(null);
+  let editingPeerIface = $state("");
 
   onMount(() => {
     loadStatus();
@@ -103,6 +106,11 @@
     } catch (e: any) {
       error.set(e?.message || String(e));
     }
+  }
+
+  function handleEditPeer(iface: string, peer: any) {
+    editingPeerIface = iface;
+    editingPeer = peer;
   }
 
   let interfaces = $derived(status?.interfaces || []);
@@ -257,11 +265,25 @@
         <PeerTable
           peers={iface.peers || []}
           onRemove={(pubKey) => handleRemovePeer(iface.name, pubKey)}
+          onEdit={(peer) => handleEditPeer(iface.name, peer)}
         />
       </div>
     {/each}
   {/if}
 </div>
+
+{#if editingPeer}
+  <EditPeerModal
+    serverId={serverId}
+    interfaceName={editingPeerIface}
+    peer={editingPeer}
+    onClose={() => {
+      editingPeer = null;
+      editingPeerIface = "";
+    }}
+    onSaved={loadStatus}
+  />
+{/if}
 
 <style lang="scss">
   .dashboard {

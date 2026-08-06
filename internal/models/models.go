@@ -35,6 +35,8 @@ type WGPeer struct {
 	RxBytes            int64     `yaml:"rxBytes" json:"rxBytes"`
 	TxBytes            int64     `yaml:"txBytes" json:"txBytes"`
 	PersistentKeepalive int      `yaml:"persistentKeepalive,omitempty" json:"persistentKeepalive,omitempty"`
+	Name               string    `yaml:"name,omitempty" json:"name,omitempty"`
+	Description        string    `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 type WGStatus struct {
@@ -49,6 +51,8 @@ type AddPeerRequest struct {
 	PresharedKey        string   `yaml:"presharedKey,omitempty" json:"presharedKey,omitempty"`
 	Endpoint            string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
 	PersistentKeepalive int      `yaml:"persistentKeepalive,omitempty" json:"persistentKeepalive,omitempty"`
+	Name                string   `yaml:"name,omitempty" json:"name,omitempty"`
+	Description         string   `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 type AddPeerResult struct {
@@ -69,6 +73,14 @@ type CreateInterfaceRequest struct {
 type KeyPair struct {
 	PublicKey  string `yaml:"publicKey" json:"publicKey"`
 	PrivateKey string `yaml:"privateKey" json:"privateKey"`
+}
+
+type UpdatePeerMetaRequest struct {
+	ServerID    string `yaml:"serverId" json:"serverId"`
+	Interface   string `yaml:"interface" json:"interface"`
+	PublicKey   string `yaml:"publicKey" json:"publicKey"`
+	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 type TestConnectionResult struct {

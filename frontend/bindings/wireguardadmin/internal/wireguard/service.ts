@@ -40,3 +40,7 @@ export function RemovePeer(serverID: string, iface: string, publicKey: string): 
 export function SyncConfig(serverID: string, name: string): $CancellablePromise<boolean> {
     return $Call.ByID(613508359, serverID, name);
 }
+
+export function UpdatePeerMeta(req: models$0.UpdatePeerMetaRequest): $CancellablePromise<boolean> {
+    return $Call.ByID(2043588130, req);
+}
