@@ -188,26 +188,30 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (*ssh.Session, e
 		session.Stdin = bytes.NewBufferString(finalInput)
 	}
 
-	// Stream stdout line-by-line; commands should redirect stderr with 2>&1
+	// Stream stdout and stderr line-by-line
 	pr, pw := io.Pipe()
 	session.Stdout = pw
+	session.Stderr = pw
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		scanner := bufio.NewScanner(pr)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if onLine != nil {
 				onLine(line)
+			} else {
+				c.emit(ExecEvent{Kind: "output", Line: line})
 			}
-			c.emit(ExecEvent{Kind: "output", Line: line})
 		}
 	}()
 
 	err = session.Run(finalCmd)
 	pw.Close()
 	<-done
+	session.Close()
 
 	errMsg := ""
 	if err != nil {
