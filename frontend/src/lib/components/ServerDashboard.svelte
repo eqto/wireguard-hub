@@ -7,6 +7,7 @@
   import StatusBadge from "./StatusBadge.svelte";
   import PeerTable from "./PeerTable.svelte";
   import EditPeerModal from "./EditPeerModal.svelte";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Pencil from "@lucide/svelte/icons/pencil";
@@ -45,6 +46,7 @@
   let serverInfo = $derived($servers.find((s) => s.id === serverId));
   let editingPeer = $state<any>(null);
   let editingPeerIface = $state("");
+  let deletingInterface = $state<string | null>(null);
   let wgNotInstalled = $state(false);
   let installing = $state(false);
   let installDone = $state(false);
@@ -111,13 +113,14 @@
     }
   }
 
-  async function handleDeleteInterface(iface: string) {
-    if (
-      !confirm(
-        `Delete interface ${iface}? This will bring it down and remove its config file.`,
-      )
-    )
-      return;
+  function handleDeleteInterface(iface: string) {
+    deletingInterface = iface;
+  }
+
+  async function confirmDeleteInterface() {
+    const iface = deletingInterface;
+    deletingInterface = null;
+    if (!iface) return;
     try {
       await WireguardService.DeleteInterface(serverId, iface);
       await loadStatus();
@@ -410,6 +413,16 @@
       editingPeerIface = "";
     }}
     onSaved={loadStatus}
+  />
+{/if}
+
+{#if deletingInterface}
+  <ConfirmDialog
+    title="Delete Interface"
+    message={`Delete interface ${deletingInterface}? This will bring it down and remove its config file.`}
+    confirmLabel="Delete"
+    onConfirm={confirmDeleteInterface}
+    onCancel={() => (deletingInterface = null)}
   />
 {/if}
 
