@@ -41,6 +41,8 @@ type WGPeer struct {
 
 type WGStatus struct {
 	Interfaces []WGInterface `yaml:"interfaces" json:"interfaces"`
+	Hostname   string        `yaml:"hostname,omitempty" json:"hostname,omitempty"`
+	ServerIP   string        `yaml:"serverIP,omitempty" json:"serverIP,omitempty"`
 }
 
 type AddPeerRequest struct {

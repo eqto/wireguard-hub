@@ -151,6 +151,18 @@
         <StatusBadge status={serverInfo.status} />
       </div>
       <div class="dashboard-actions">
+        {#if status?.hostname}
+          <div class="server-endpoint">
+            <span class="server-endpoint-name" style="color: var(--text-primary);">
+              {status.hostname}
+            </span>
+            {#if status?.serverIP}
+              <span class="server-endpoint-ip" style="color: var(--text-muted);">
+                {status.serverIP}
+              </span>
+            {/if}
+          </div>
+        {/if}
         <button
           on:click={loadStatus}
           disabled={isLoading}
@@ -452,5 +464,22 @@
     &:hover {
       background-color: var(--bg-tertiary);
     }
+  }
+
+  .server-endpoint {
+    display: flex;
+    flex-direction: column;
+    margin-right: auto;
+  }
+
+  .server-endpoint-name {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .server-endpoint-ip {
+    font-size: 12px;
+    line-height: 1.2;
   }
 </style>

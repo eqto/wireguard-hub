@@ -52,6 +52,12 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		}
 	}
 
+	hostname, _, _ := client.Exec("hostname")
+	status.Hostname = strings.TrimSpace(hostname)
+
+	serverIP, _, _ := client.Exec("hostname -I | awk '{print $1}'")
+	status.ServerIP = strings.TrimSpace(serverIP)
+
 	return status, nil
 }
 

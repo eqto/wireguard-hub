@@ -85,4 +85,6 @@ export interface WGPeer {
 
 export interface WGStatus {
     "interfaces": WGInterface[] | null;
+    "hostname"?: string;
+    "serverIP"?: string;
 }
