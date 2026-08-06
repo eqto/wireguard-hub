@@ -28,6 +28,7 @@
     onEditServer,
     onDeleteServer,
     onBack,
+    refreshTrigger = 0,
   }: {
     serverId: string;
     onRefresh: () => void;
@@ -37,6 +38,7 @@
     onEditServer: (server: any) => void;
     onDeleteServer: (id: string) => void;
     onBack?: () => void;
+    refreshTrigger?: number;
   } = $props();
 
   let status = $state<any>(null);
@@ -56,6 +58,12 @@
 
   onMount(() => {
     loadStatus();
+  });
+
+  $effect(() => {
+    if (refreshTrigger > 0) {
+      loadStatus();
+    }
   });
 
   onDestroy(() => {

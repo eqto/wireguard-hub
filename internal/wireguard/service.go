@@ -429,7 +429,7 @@ func (s *Service) CreateInterface(req models.CreateInterfaceRequest) (models.WGI
 
 	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Name)
 
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, conf.String()))
+	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), conf.String())
 	if err != nil {
 		return models.WGInterface{}, fmt.Errorf("failed to write config file: %s: %w", stderr, err)
 	}
@@ -565,7 +565,7 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 	}
 
 	updatedConf := strings.TrimRight(existingConf, "\n") + "\n" + peerSection.String()
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), updatedConf)
 	if err != nil {
 		return models.AddPeerResult{}, fmt.Errorf("failed to update config file: %s: %w", stderr, err)
 	}
@@ -620,7 +620,7 @@ func (s *Service) RemovePeer(serverID string, iface string, publicKey string) (b
 	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
 	existingConf, _, _ := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
 	updatedConf := removePeerSection(existingConf, publicKey)
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), updatedConf)
 	if err != nil {
 		return false, fmt.Errorf("failed to update config file: %s: %w", stderr, err)
 	}
@@ -645,7 +645,7 @@ func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error)
 		return false, fmt.Errorf("peer not found in config: %s", req.PublicKey)
 	}
 
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo tee %s > /dev/null << 'WGCONF'\n%s\nWGCONF", confPath, updatedConf))
+	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), updatedConf)
 	if err != nil {
 		return false, fmt.Errorf("failed to write config: %s: %w", stderr, err)
 	}

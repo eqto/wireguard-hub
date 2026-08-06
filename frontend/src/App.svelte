@@ -23,6 +23,7 @@
   let editingServer = $state<any>(null);
   let showAddPeer = $state(false);
   let showInterfaceModal = $state(false);
+  let refreshTrigger = $state(0);
   let showConfigViewer = $state(false);
   let configData = $state({ name: "", content: "" });
   let peerInterface = $state("");
@@ -122,6 +123,10 @@
     showInterfaceModal = true;
   }
 
+  function handleInterfaceCreated() {
+    refreshTrigger++;
+  }
+
   function handleViewConfig(name: string, content: string) {
     configData = { name, content };
     showConfigViewer = true;
@@ -162,6 +167,7 @@
           onEditServer={handleEditServer}
           onDeleteServer={handleDeleteServer}
           onBack={() => selectedServerId.set(null)}
+          refreshTrigger={refreshTrigger}
         />
       {:else}
         <ServerGrid
@@ -182,6 +188,7 @@
           onViewConfig={handleViewConfig}
           onEditServer={handleEditServer}
           onDeleteServer={handleDeleteServer}
+          refreshTrigger={refreshTrigger}
         />
       {:else}
         <div class="app-empty">
@@ -229,6 +236,7 @@
   <InterfaceModal
     serverId={selected}
     onClose={() => (showInterfaceModal = false)}
+    onCreated={handleInterfaceCreated}
   />
 {/if}
 

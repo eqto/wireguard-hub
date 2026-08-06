@@ -7,9 +7,11 @@
   let {
     serverId,
     onClose,
+    onCreated,
   }: {
     serverId: string;
     onClose: () => void;
+    onCreated?: () => void;
   } = $props();
 
   let name = $state("wg0");
@@ -45,6 +47,7 @@
         endpoint: endpoint,
       };
       await WireguardService.CreateInterface(req);
+      if (onCreated) onCreated();
       onClose();
     } catch (e: any) {
       error.set(e?.message || String(e));
