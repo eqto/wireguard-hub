@@ -39,7 +39,8 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	// Detect package manager and install
 	_, _, aptErr := client.Exec("command -v apt-get")
 	if aptErr == nil {
-		session, err := client.ExecStreaming("sudo apt-get update -y 2>&1 && sudo apt-get install -y wireguard wireguard-tools 2>&1", emit)
+		// Step 1: apt-get update
+		session, err := client.ExecStreaming("sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", emit)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()
@@ -50,6 +51,40 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		s.mu.Lock()
 		s.session = nil
 		s.mu.Unlock()
+
+		// Step 2: apt-get install with retry for dpkg lock
+		installCmd := "sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get install -y wireguard wireguard-tools 2>&1"
+		var installErr error
+		for attempt := 1; attempt <= 6; attempt++ {
+			session, err = client.ExecStreaming(installCmd, emit)
+			s.mu.Lock()
+			s.session = session
+			s.mu.Unlock()
+			if err == nil {
+				s.mu.Lock()
+				s.session = nil
+				s.mu.Unlock()
+				installErr = nil
+				break
+			}
+			s.mu.Lock()
+			s.session = nil
+			s.mu.Unlock()
+			installErr = err
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "lock") || strings.Contains(errMsg, "held by process") {
+				if attempt < 6 {
+					emit(fmt.Sprintf("Waiting for package manager lock... (attempt %d/6)", attempt+1))
+					time.Sleep(5 * time.Second)
+					continue
+				}
+			}
+			break
+		}
+		if installErr != nil {
+			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": installErr.Error()})
+			return false, installErr
+		}
 		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
 		return true, nil
 	}
