@@ -53,6 +53,10 @@ export function RemovePeer(serverID: string, iface: string, publicKey: string): 
     return $Call.ByID(1985494234, serverID, iface, publicKey);
 }
 
+export function RestartInterface(serverID: string, name: string): $CancellablePromise<boolean> {
+    return $Call.ByID(2584832716, serverID, name);
+}
+
 export function SyncConfig(serverID: string, name: string): $CancellablePromise<boolean> {
     return $Call.ByID(1268158863, serverID, name);
 }

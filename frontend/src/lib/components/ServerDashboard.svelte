@@ -8,7 +8,6 @@
   import StatusBadge from "./StatusBadge.svelte";
   import PeerTable from "./PeerTable.svelte";
   import EditPeerModal from "./EditPeerModal.svelte";
-  import ConfirmDialog from "./ConfirmDialog.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Pencil from "@lucide/svelte/icons/pencil";
@@ -49,7 +48,7 @@
   let editingPeer = $state<any>(null);
   let editingPeerIface = $state("");
   let editingPeerIsClient = $state(false);
-  let deletingInterface = $state<string | null>(null);
+  let stopInterface = $state<string | null>(null);
   let wgNotInstalled = $state(false);
   let installing = $state(false);
   let installDone = $state(false);
@@ -116,22 +115,6 @@
     }
   }
 
-  function handleDeleteInterface(iface: string) {
-    deletingInterface = iface;
-  }
-
-  async function confirmDeleteInterface() {
-    const iface = deletingInterface;
-    deletingInterface = null;
-    if (!iface) return;
-    try {
-      await WireguardService.DeleteInterface(serverId, iface);
-      await loadStatus();
-    } catch (e: any) {
-      error.set(e?.message || String(e));
-    }
-  }
-
   async function handleBringUp(iface: string) {
     try {
       await WireguardService.BringUpInterface(serverId, iface);
@@ -141,9 +124,20 @@
     }
   }
 
-  async function handleBringDown(iface: string) {
+  function handleBringDown(iface: string) {
+    stopInterface = iface;
+  }
+
+  async function confirmStop(restart: boolean) {
+    const iface = stopInterface;
+    stopInterface = null;
+    if (!iface) return;
     try {
-      await WireguardService.BringDownInterface(serverId, iface);
+      if (restart) {
+        await WireguardService.RestartInterface(serverId, iface);
+      } else {
+        await WireguardService.BringDownInterface(serverId, iface);
+      }
       await loadStatus();
     } catch (e: any) {
       error.set(e?.message || String(e));
@@ -387,22 +381,7 @@
               {/if}
             </div>
             <div class="interface-actions">
-              {#if !iface.online}
-                <button
-                  onclick={() => handleBringUp(iface.name)}
-                  class="btn btn-primary btn-small"
-                >
-                  <Power class="icon-sm" />
-                  Bring Up
-                </button>
-              {:else}
-                <button
-                  onclick={() => handleBringDown(iface.name)}
-                  class="btn btn-primary btn-small"
-                >
-                  <Power class="icon-sm" />
-                  Bring Down
-                </button>
+              {#if iface.online}
                 <button
                   onclick={() => onAddPeer(iface.name, false)}
                   class="btn btn-primary btn-small"
@@ -436,13 +415,23 @@
                   <Sync class="icon" style="color: var(--text-secondary);" />
                 </button>
               {/if}
-              <button
-                onclick={() => handleDeleteInterface(iface.name)}
-                class="btn-icon btn-icon-small"
-                title="Delete Interface"
-              >
-                <Trash2 class="icon" style="color: var(--danger);" />
-              </button>
+              {#if !iface.online}
+                <button
+                  onclick={() => handleBringUp(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Start"
+                >
+                  <Power class="icon" style="color: var(--success);" />
+                </button>
+              {:else}
+                <button
+                  onclick={() => handleBringDown(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Stop"
+                >
+                  <Power class="icon" style="color: var(--danger);" />
+                </button>
+              {/if}
             </div>
           </div>
 
@@ -535,23 +524,6 @@
               {/if}
             </div>
             <div class="interface-actions">
-              {#if !iface.online}
-                <button
-                  onclick={() => handleBringUp(iface.name)}
-                  class="btn btn-primary btn-small"
-                >
-                  <Power class="icon-sm" />
-                  Bring Up
-                </button>
-              {:else}
-                <button
-                  onclick={() => handleBringDown(iface.name)}
-                  class="btn btn-primary btn-small"
-                >
-                  <Power class="icon-sm" />
-                  Bring Down
-                </button>
-              {/if}
               {#if iface.online}
                 <span
                   class="rx-tx-stat"
@@ -577,13 +549,23 @@
                   <Sync class="icon" style="color: var(--text-secondary);" />
                 </button>
               {/if}
-              <button
-                onclick={() => handleDeleteInterface(iface.name)}
-                class="btn-icon btn-icon-small"
-                title="Delete Interface"
-              >
-                <Trash2 class="icon" style="color: var(--danger);" />
-              </button>
+              {#if !iface.online}
+                <button
+                  onclick={() => handleBringUp(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Start"
+                >
+                  <Power class="icon" style="color: var(--success);" />
+                </button>
+              {:else}
+                <button
+                  onclick={() => handleBringDown(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Stop"
+                >
+                  <Power class="icon" style="color: var(--danger);" />
+                </button>
+              {/if}
             </div>
           </div>
 
@@ -734,14 +716,54 @@
   />
 {/if}
 
-{#if deletingInterface}
-  <ConfirmDialog
-    title="Delete Interface"
-    message={`Delete interface ${deletingInterface}? This will bring it down and remove its config file.`}
-    confirmLabel="Delete"
-    onConfirm={confirmDeleteInterface}
-    onCancel={() => (deletingInterface = null)}
-  />
+{#if stopInterface}
+  <div
+    class="modal-overlay"
+    onclick={() => (stopInterface = null)}
+    style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;"
+  >
+    <div
+      class="modal"
+      onclick={(e) => e.stopPropagation()}
+      style="background-color: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 360px; width: 90%;"
+      role="dialog"
+      tabindex="0"
+    >
+      <h2
+        style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);"
+      >
+        Stop Interface {stopInterface}?
+      </h2>
+      <p
+        style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;"
+      >
+        This will bring down the WireGuard interface. Choose an action below.
+      </p>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button
+          onclick={() => (stopInterface = null)}
+          class="btn-text"
+          style="padding: 8px 16px; background-color: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary);"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={() => confirmStop(true)}
+          class="btn btn-secondary"
+          style="background-color: rgba(22,163,74,0.15); color: var(--success);"
+        >
+          Restart
+        </button>
+        <button
+          onclick={() => confirmStop(false)}
+          class="btn btn-primary"
+          style="background-color: rgba(220,38,38,0.15); color: var(--danger);"
+        >
+          Stop
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style lang="scss">

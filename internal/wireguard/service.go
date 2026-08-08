@@ -596,6 +596,20 @@ func (s *Service) BringDownInterface(serverID string, name string) (bool, error)
 	return true, nil
 }
 
+func (s *Service) RestartInterface(serverID string, name string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s && sudo wg-quick up %s", name, name))
+	if err != nil {
+		return false, fmt.Errorf("failed to restart interface: %s: %w", stderr, err)
+	}
+
+	return true, nil
+}
+
 func (s *Service) DeleteInterface(serverID string, name string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
