@@ -43,6 +43,16 @@ export function formatRelativeTime(date: Date | string): string {
   return `${days}d ago`
 }
 
+// isHandshakeFresh returns true if the latest handshake happened within
+// the last 3 minutes (WireGuard rekeys roughly every 2-5 minutes).
+export function isHandshakeFresh(date: Date | string): boolean {
+  if (!date) return false
+  const d = typeof date === 'string' ? new Date(date) : date
+  if (d.getTime() === 0) return false
+  const diff = Date.now() - d.getTime()
+  return diff >= 0 && diff <= 3 * 60 * 1000
+}
+
 export function sortIPs(ips: string[]): string[] {
   return [...ips].sort((a, b) => {
     const pa = a.split('/')

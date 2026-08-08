@@ -4,8 +4,12 @@
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { servers, loading, error } from "../stores/servers";
   import { showToast } from "../stores/toast";
-  import { formatBytes, unwrapResponse, sortIPs } from "../utils";
-  import StatusBadge from "./StatusBadge.svelte";
+  import {
+    formatBytes,
+    unwrapResponse,
+    sortIPs,
+    isHandshakeFresh,
+  } from "../utils";
   import PeerTable from "./PeerTable.svelte";
   import EditPeerModal from "./EditPeerModal.svelte";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
@@ -56,9 +60,12 @@
   let installCancelled = $state(false);
 
   let offDone: (() => void) | null = null;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     loadStatus();
+    // Poll every 5 seconds to refresh handshake status (silent: no loading spinner).
+    pollTimer = setInterval(() => loadStatus(true), 5000);
   });
 
   $effect(() => {
@@ -69,11 +76,12 @@
 
   onDestroy(() => {
     if (offDone) offDone();
+    if (pollTimer) clearInterval(pollTimer);
   });
 
-  async function loadStatus() {
-    isLoading = true;
-    error.set(null);
+  async function loadStatus(silent = false) {
+    if (!silent) isLoading = true;
+    if (!silent) error.set(null);
     wgNotInstalled = false;
     try {
       const result = await WireguardService.GetStatus(serverId);
@@ -90,9 +98,9 @@
           s.id === serverId ? { ...s, status: "offline" as const } : s,
         ),
       );
-      error.set(e?.message || String(e));
+      if (!silent) error.set(e?.message || String(e));
     } finally {
-      isLoading = false;
+      if (!silent) isLoading = false;
     }
   }
 
@@ -224,7 +232,6 @@
             {/if}
           </p>
         </div>
-        <StatusBadge status={serverInfo.status} />
       </div>
       <div class="dashboard-actions">
         {#if status}
@@ -509,18 +516,22 @@
               </h2>
               {#if !iface.online}
                 <span
-                  class="interface-port"
-                  style="background-color: rgba(220,38,38,0.1); color: var(--danger);"
-                >
-                  Offline
-                </span>
+                  class="status-dot"
+                  title="Disconnected"
+                  style="background-color: var(--danger);"
+                ></span>
+              {:else if (iface.peers || []).some( (p) => isHandshakeFresh(p.latestHandshake), )}
+                <span
+                  class="status-dot"
+                  title="Connected"
+                  style="background-color: var(--success);"
+                ></span>
               {:else}
                 <span
-                  class="interface-port"
-                  style="background-color: var(--bg-tertiary); color: var(--text-muted);"
-                >
-                  Client Mode
-                </span>
+                  class="status-dot"
+                  title="Disconnected"
+                  style="background-color: var(--danger);"
+                ></span>
               {/if}
             </div>
             <div class="interface-actions">
@@ -851,6 +862,13 @@
         font-size: 12px;
         padding: 2px 8px;
         border-radius: 9999px;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
       }
 
       .interface-actions {
