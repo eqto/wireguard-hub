@@ -198,7 +198,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 
 	// 1. Get running interface names and live stats from wg show all dump.
 	runningStats := map[string]models.WGInterface{}
-	stdout, _, _ := client.Exec("sudo wg show all dump")
+	stdout, _, _ := client.ExecSilent("sudo wg show all dump")
 	if strings.TrimSpace(stdout) != "" {
 		liveStatus := parseWGDump(stdout)
 		for _, iface := range liveStatus.Interfaces {
@@ -243,6 +243,12 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 						break
 					}
 				}
+			}
+		} else if iface.PrivateKey != "" {
+			// Interface is offline: derive public key from the config file's private key.
+			pubKey, _, err := client.ExecWithInputSilent("wg pubkey", iface.PrivateKey)
+			if err == nil {
+				iface.PublicKey = strings.TrimSpace(pubKey)
 			}
 		}
 
