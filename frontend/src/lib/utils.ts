@@ -42,3 +42,19 @@ export function formatRelativeTime(date: Date | string): string {
   const days = Math.floor(hours / 24)
   return `${days}d ago`
 }
+
+export function sortIPs(ips: string[]): string[] {
+  return [...ips].sort((a, b) => {
+    const pa = a.split('/')
+    const pb = b.split('/')
+    const ipA = pa[0].split('.').map(Number)
+    const ipB = pb[0].split('.').map(Number)
+    for (let i = 0; i < 4; i++) {
+      const diff = (ipA[i] || 0) - (ipB[i] || 0)
+      if (diff !== 0) return diff
+    }
+    const maskA = parseInt(pa[1] || '0', 10)
+    const maskB = parseInt(pb[1] || '0', 10)
+    return maskA - maskB
+  })
+}

@@ -3,7 +3,7 @@
   import { Events } from "@wailsio/runtime";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { servers, loading, error } from "../stores/servers";
-  import { formatBytes, unwrapResponse } from "../utils";
+  import { formatBytes, unwrapResponse, sortIPs } from "../utils";
   import StatusBadge from "./StatusBadge.svelte";
   import PeerTable from "./PeerTable.svelte";
   import EditPeerModal from "./EditPeerModal.svelte";
@@ -430,11 +430,11 @@
           </div>
 
           <div class="interface-stats">
-            <div>
-              <div class="stat-label" style="color: var(--text-muted);">
-                Public Key
-              </div>
-              <div
+            <div class="server-peer-field">
+              <span class="server-peer-label" style="color: var(--text-muted);"
+                >Public Key:</span
+              >
+              <span
                 class="stat-value-mono stat-value-full"
                 style="color: var(--text-secondary);"
                 title={iface.publicKey}
@@ -444,7 +444,7 @@
                 {:else}
                   (not running)
                 {/if}
-              </div>
+              </span>
             </div>
           </div>
 
@@ -467,10 +467,16 @@
                         {peer.endpoint || "No endpoint"}
                       </div>
                       <div
-                        class="server-peer-detail"
+                        class="server-peer-detail allowed-ips-chips"
                         style="color: var(--text-muted);"
                       >
-                        {(peer.allowedIPs || []).join(", ")}
+                        {#if (peer.allowedIPs || []).length > 0}
+                          {#each sortIPs(peer.allowedIPs) as ip}
+                            <span class="allowed-ip-chip">{ip}</span>
+                          {/each}
+                        {:else}
+                          None
+                        {/if}
                       </div>
                     </div>
                   </div>
@@ -557,11 +563,11 @@
           </div>
 
           <div class="interface-stats">
-            <div>
-              <div class="stat-label" style="color: var(--text-muted);">
-                Public Key
-              </div>
-              <div
+            <div class="server-peer-field">
+              <span class="server-peer-label" style="color: var(--text-muted);"
+                >Public Key:</span
+              >
+              <span
                 class="stat-value-mono stat-value-full"
                 style="color: var(--text-secondary);"
                 title={iface.publicKey}
@@ -571,7 +577,7 @@
                 {:else}
                   (not running)
                 {/if}
-              </div>
+              </span>
             </div>
           </div>
 
@@ -595,9 +601,18 @@
                         class="server-peer-label"
                         style="color: var(--text-muted);">Allowed IPs:</span
                       >
-                      <span style="color: var(--text-primary);"
-                        >{(peer.allowedIPs || []).join(", ") || "None"}</span
+                      <span
+                        style="color: var(--text-primary);"
+                        class="allowed-ips-chips"
                       >
+                        {#if (peer.allowedIPs || []).length > 0}
+                          {#each sortIPs(peer.allowedIPs) as ip}
+                            <span class="allowed-ip-chip">{ip}</span>
+                          {/each}
+                        {:else}
+                          None
+                        {/if}
+                      </span>
                     </div>
                     {#if peer.name}
                       <div class="server-peer-field">
@@ -899,6 +914,24 @@
     font-size: 12px;
   }
 
+  .allowed-ips-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .allowed-ip-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: "Courier New", monospace;
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
   .server-peer-field {
     font-size: 13px;
     display: flex;
@@ -908,7 +941,11 @@
   .server-peer-label {
     font-size: 12px;
     font-weight: 500;
-    min-width: 120px;
+    white-space: nowrap;
+  }
+
+  .server-peer-info .server-peer-label {
+    min-width: 110px;
   }
 
   .server-peer-actions {

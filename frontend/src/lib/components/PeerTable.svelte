@@ -1,12 +1,21 @@
 <script lang="ts">
   import { Trash2, Pencil } from "@lucide/svelte";
-  import { formatBytes, formatRelativeTime, truncateKey } from "../utils";
+  import {
+    formatBytes,
+    formatRelativeTime,
+    truncateKey,
+    sortIPs,
+  } from "../utils";
 
   let {
     peers,
     onRemove,
     onEdit,
-  }: { peers: any[]; onRemove: (pubKey: string) => void; onEdit: (peer: any) => void } = $props();
+  }: {
+    peers: any[];
+    onRemove: (pubKey: string) => void;
+    onEdit: (peer: any) => void;
+  } = $props();
 </script>
 
 {#if peers.length === 0}
@@ -72,7 +81,15 @@
               class="peer-td peer-td-xs"
               style="color: var(--text-secondary);"
             >
-              {(peer.allowedIPs || []).join(", ") || "-"}
+              {#if (peer.allowedIPs || []).length > 0}
+                <div class="allowed-ips-chips">
+                  {#each sortIPs(peer.allowedIPs) as ip}
+                    <span class="allowed-ip-chip">{ip}</span>
+                  {/each}
+                </div>
+              {:else}
+                -
+              {/if}
             </td>
             <td
               class="peer-td peer-td-xs"
@@ -99,7 +116,10 @@
                   class="peer-remove-btn"
                   title="Edit peer metadata"
                 >
-                  <Pencil class="icon-sm" style="color: var(--text-secondary);" />
+                  <Pencil
+                    class="icon-sm"
+                    style="color: var(--text-secondary);"
+                  />
                 </button>
                 <button
                   onclick={() => onRemove(peer.publicKey)}
@@ -185,5 +205,23 @@
     &:hover {
       background-color: rgba(0, 0, 0, 0.1);
     }
+  }
+
+  .allowed-ips-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .allowed-ip-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: "Courier New", monospace;
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--text-primary);
+    white-space: nowrap;
   }
 </style>
