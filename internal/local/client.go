@@ -43,12 +43,12 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 
 	finalCmd := cmd
 	finalInput := input
-	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") && !strings.HasPrefix(cmd, "sudo -n") {
+	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
 		if c.sudoPassword != "" {
 			finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
 			finalInput = c.sudoPassword + "\n" + input
 		} else {
-			finalCmd = "sudo -n " + strings.TrimPrefix(cmd, "sudo ")
+			return "", "", fmt.Errorf("no sudo password configured")
 		}
 	}
 
@@ -103,12 +103,12 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 
 	finalCmd := cmd
 	finalInput := ""
-	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") && !strings.HasPrefix(cmd, "sudo -n") {
+	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
 		if c.sudoPassword != "" {
 			finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
 			finalInput = c.sudoPassword + "\n"
 		} else {
-			finalCmd = "sudo -n " + strings.TrimPrefix(cmd, "sudo ")
+			return nil, fmt.Errorf("no sudo password configured")
 		}
 	}
 

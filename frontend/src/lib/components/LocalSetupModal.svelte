@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { X, Plug, Loader2 } from "@lucide/svelte";
+  import { X, Loader2 } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { unwrapResponse } from "../utils";
@@ -18,12 +18,13 @@
   let username = $state("");
   let password = $state("");
   let savePassword = $state(false);
-  let testing = $state(false);
   let saving = $state(false);
   let testResult = $state<{ success: boolean; message: string } | null>(null);
   let configured = $state(false);
+  let usernameInput = $state<HTMLInputElement | null>(null);
 
   onMount(async () => {
+    usernameInput?.focus();
     try {
       const result = await ServerService.GetLocalConfig();
       const cfg = unwrapResponse(result);
@@ -36,30 +37,8 @@
     }
   });
 
-  async function handleTest() {
-    testing = true;
-    testResult = null;
-    try {
-      if (username || password) {
-        await ServerService.SetLocalSessionCredentials(username, password);
-      }
-      const data = {
-        id: "local",
-        name: "Local",
-        host: "localhost",
-        isLocal: true,
-      };
-      const result = await ServerService.TestConnection(data);
-      const r = unwrapResponse(result);
-      testResult = { success: r.success, message: r.message };
-    } catch (e: any) {
-      testResult = { success: false, message: e?.message || String(e) };
-    } finally {
-      testing = false;
-    }
-  }
-
   async function handleSave() {
+    if (!password) return;
     saving = true;
     testResult = null;
     try {
@@ -106,16 +85,15 @@
 
     <div class="modal-body">
       <p class="modal-description" style="color: var(--text-muted);">
-        Configure sudo credentials for managing WireGuard on this machine. This
-        is optional — leave empty if you have passwordless sudo.
+        Configure sudo credentials for managing WireGuard on this machine.
       </p>
 
       <div class="form-group">
         <label class="label">Sudo Username</label>
         <input
+          bind:this={usernameInput}
           bind:value={username}
           type="text"
-          placeholder="your-username"
           class="input"
         />
       </div>
@@ -125,7 +103,6 @@
         <input
           bind:value={password}
           type="password"
-          placeholder="••••••••"
           class="input"
           onkeydown={(e) => e.key === "Enter" && handleSave()}
         />
@@ -151,14 +128,6 @@
     </div>
 
     <div class="modal-footer">
-      <button onclick={handleTest} disabled={testing} class="btn btn-secondary">
-        {#if testing}
-          <Loader2 class="icon spin" />
-        {:else}
-          <Plug class="icon" />
-        {/if}
-        Test Connection
-      </button>
       <div class="footer-actions">
         <button
           onclick={onClose}
@@ -167,11 +136,15 @@
         >
           Cancel
         </button>
-        <button onclick={handleSave} disabled={saving} class="btn btn-primary">
+        <button
+          onclick={handleSave}
+          disabled={saving || !password}
+          class="btn btn-primary"
+        >
           {#if saving}
             <Loader2 class="icon spin" />
           {/if}
-          Save
+          Open
         </button>
       </div>
     </div>
@@ -210,6 +183,13 @@
 
   .spin {
     animation: spin 1s linear infinite;
+  }
+
+  .test-result {
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-top: 8px;
   }
 
   @keyframes spin {

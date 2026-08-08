@@ -277,13 +277,10 @@ func TestConnection(server models.ServerConfig, jump Executor) (*models.TestConn
 				}, nil
 			}
 		} else {
-			_, _, err := client.Exec("sudo -n true")
-			if err != nil {
-				return &models.TestConnectionResult{
-					Success: false,
-					Message: "SSH connected, but the user does not have passwordless sudo. Use password authentication or configure NOPASSWD on the server.",
-				}, nil
-			}
+			return &models.TestConnectionResult{
+				Success: false,
+				Message: "SSH connected, but no sudo password configured. Configure sudo credentials for this server.",
+			}, nil
 		}
 	}
 

@@ -205,14 +205,9 @@ func (s *Service) testLocalConnection() (models.TestConnectionResult, error) {
 		_, stderr, err := client.Exec("sudo true")
 		if err != nil {
 			msg := strings.TrimSpace(stderr)
-			if s.localConfig == nil || s.localConfig.Password == "" {
-				msg = "Local access works, but the user does not have passwordless sudo. Configure local sudo credentials."
-			} else {
-				msg = "Local access works, but sudo authentication failed: " + msg
-			}
 			return models.TestConnectionResult{
 				Success: false,
-				Message: msg,
+				Message: "Sudo authentication failed: " + msg,
 			}, nil
 		}
 	}
@@ -375,7 +370,7 @@ func (s *Service) GetLocalConfig() (models.LocalConfig, error) {
 	}
 	cfg := *s.localConfig
 	cfg.Password = ""
-	cfg.Configured = cfg.Username != "" || (s.localConfig.Password != "")
+	cfg.Configured = s.localConfig.Password != ""
 	return cfg, nil
 }
 
