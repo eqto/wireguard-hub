@@ -117,6 +117,7 @@
           type="password"
           placeholder="••••••••"
           class="input"
+          onkeydown={(e) => e.key === "Enter" && handleSave()}
         />
       </div>
 

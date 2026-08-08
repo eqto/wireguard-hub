@@ -29,9 +29,7 @@
   // Candidates for jump host: exclude the server being edited and servers that
   // themselves use a jump host (single-hop constraint). Backend still validates.
   let jumpCandidates = $derived(
-    ($servers || []).filter(
-      (s) => s.id !== server?.id && !s.viaServerId,
-    ),
+    ($servers || []).filter((s) => s.id !== server?.id && !s.viaServerId),
   );
 
   async function handleTest() {
@@ -174,6 +172,7 @@
             type="password"
             placeholder="••••••••"
             class="input"
+            onkeydown={(e) => e.key === "Enter" && handleSave()}
           />
         </div>
       {:else}
@@ -193,6 +192,7 @@
             type="password"
             placeholder="••••••••"
             class="input"
+            onkeydown={(e) => e.key === "Enter" && handleSave()}
           />
         </div>
       {/if}
