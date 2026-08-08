@@ -414,7 +414,7 @@ func parseInterfaceConfig(configText, ifaceName string) models.WGInterface {
 			continue
 		}
 
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "# Name") && !strings.HasPrefix(trimmed, "# Description") {
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(strings.ToLower(trimmed), "# name") && !strings.HasPrefix(strings.ToLower(trimmed), "# description") {
 			continue
 		}
 
@@ -422,38 +422,38 @@ func parseInterfaceConfig(configText, ifaceName string) models.WGInterface {
 		if len(parts) != 2 {
 			continue
 		}
-		key := strings.TrimSpace(parts[0])
+		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		val := strings.TrimSpace(parts[1])
 
 		if !inPeerSection {
 			switch key {
-			case "PrivateKey":
+			case "privatekey":
 				iface.PrivateKey = val
-			case "ListenPort":
+			case "listenport":
 				iface.ListenPort, _ = strconv.Atoi(val)
-			case "Endpoint":
+			case "endpoint":
 				iface.Endpoint = val
 			}
 		} else if currentPeer != nil {
 			switch key {
-			case "PublicKey":
+			case "publickey":
 				currentPeer.PublicKey = val
-			case "Endpoint":
+			case "endpoint":
 				currentPeer.Endpoint = val
-			case "AllowedIPs":
+			case "allowedips":
 				for _, ip := range strings.Split(val, ",") {
 					ip = strings.TrimSpace(ip)
 					if ip != "" {
 						currentPeer.AllowedIPs = append(currentPeer.AllowedIPs, ip)
 					}
 				}
-			case "PresharedKey":
+			case "presharedkey":
 				currentPeer.PresharedKey = val
-			case "PersistentKeepalive":
+			case "persistentkeepalive":
 				currentPeer.PersistentKeepalive, _ = strconv.Atoi(val)
-			case "# Name":
+			case "# name":
 				currentPeer.Name = val
-			case "# Description":
+			case "# description":
 				currentPeer.Description = val
 			}
 		}
@@ -859,7 +859,7 @@ func removePeerSection(configText string, publicKey string) string {
 			continue
 		}
 
-		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
 			parts := strings.SplitN(trimmed, "=", 2)
 			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
 				// Remove the buffered [Peer] line and skip this entire section
@@ -900,7 +900,7 @@ func updatePeerFieldInConfig(configText string, publicKey string, field string, 
 			continue
 		}
 
-		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
 			parts := strings.SplitN(trimmed, "=", 2)
 			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
 				foundPeer = true
@@ -908,7 +908,7 @@ func updatePeerFieldInConfig(configText string, publicKey string, field string, 
 			continue
 		}
 
-		if inPeerSection && foundPeer && strings.HasPrefix(trimmed, field) {
+		if inPeerSection && foundPeer && strings.HasPrefix(strings.ToLower(trimmed), strings.ToLower(field)) {
 			lines[i] = fmt.Sprintf("%s = %s", field, value)
 			return strings.Join(lines, "\n")
 		}
@@ -942,7 +942,7 @@ func updatePeerMetaInConfig(configText string, publicKey string, name string, de
 			continue
 		}
 
-		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
 			parts := strings.SplitN(trimmed, "=", 2)
 			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
 				foundPeer = true
@@ -964,10 +964,11 @@ func updatePeerMetaInConfig(configText string, publicKey string, name string, de
 
 	for i := pubKeyLineIdx + 1; i < len(lines); i++ {
 		trimmed := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(trimmed, "# Name") {
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "# name") {
 			hasName = true
 			nameLineIdx = i
-		} else if strings.HasPrefix(trimmed, "# Description") {
+		} else if strings.HasPrefix(lower, "# description") {
 			hasDescription = true
 			descLineIdx = i
 		} else if strings.HasPrefix(trimmed, "#") || trimmed == "" {
