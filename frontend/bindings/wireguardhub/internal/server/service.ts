@@ -16,6 +16,10 @@ export function AddServer(server: models$0.ServerConfig): $CancellablePromise<mo
     return $Call.ByID(3896640669, server);
 }
 
+export function ClearLocalSessionCredentials(): $CancellablePromise<boolean> {
+    return $Call.ByID(1031904017);
+}
+
 export function CloseAll(): $CancellablePromise<void> {
     return $Call.ByID(2684578068);
 }

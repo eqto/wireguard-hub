@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { X, Plug, Loader2 } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
+  import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { unwrapResponse } from "../utils";
 
   let {
@@ -18,6 +19,7 @@
   let password = $state("");
   let savePassword = $state(false);
   let testing = $state(false);
+  let saving = $state(false);
   let testResult = $state<{ success: boolean; message: string } | null>(null);
   let configured = $state(false);
 
@@ -58,19 +60,27 @@
   }
 
   async function handleSave() {
+    saving = true;
+    testResult = null;
     try {
+      await ServerService.SetLocalSessionCredentials(username, password);
+      const result = await WireguardService.GetStatus("local");
+      unwrapResponse(result);
       if (savePassword) {
-        await ServerService.SaveLocalConfig({
-          username,
-          password,
-        });
-      } else {
-        await ServerService.SetLocalSessionCredentials(username, password);
+        await ServerService.SaveLocalConfig({ username, password });
       }
       onSave();
       onConfigured();
     } catch (e: any) {
-      testResult = { success: false, message: e?.message || String(e) };
+      const msg = e?.message || String(e);
+      testResult = { success: false, message: msg };
+      try {
+        await ServerService.ClearLocalSessionCredentials();
+      } catch {
+        // ignore
+      }
+    } finally {
+      saving = false;
     }
   }
 </script>
@@ -157,7 +167,12 @@
         >
           Cancel
         </button>
-        <button onclick={handleSave} class="btn btn-primary"> Save </button>
+        <button onclick={handleSave} disabled={saving} class="btn btn-primary">
+          {#if saving}
+            <Loader2 class="icon spin" />
+          {/if}
+          Save
+        </button>
       </div>
     </div>
   </div>
@@ -191,5 +206,18 @@
     gap: 8px;
     cursor: pointer;
     font-size: 14px;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

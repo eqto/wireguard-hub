@@ -10,6 +10,7 @@
   import Terminal from "./lib/components/Terminal.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
   import LocalSetupModal from "./lib/components/LocalSetupModal.svelte";
+  import Toaster from "./lib/components/Toaster.svelte";
   import {
     initTheme,
     servers,
@@ -17,6 +18,7 @@
     loading,
     error,
   } from "./lib/stores/servers";
+  import { showToast } from "./lib/stores/toast";
   import { unwrapResponse } from "./lib/utils";
   import * as ServerService from "../bindings/wireguardhub/internal/server/service.js";
   import * as WireguardService from "../bindings/wireguardhub/internal/wireguard/service.js";
@@ -31,6 +33,7 @@
   let peerInterface = $state("");
   let peerIsClient = $state(false);
   let showLocalSetup = $state(false);
+  let connecting = $state<string | null>(null);
 
   onMount(async () => {
     initTheme();
@@ -70,7 +73,27 @@
         return;
       }
     }
-    selectedServerId.set(id);
+    connecting = id;
+    try {
+      const result = await WireguardService.GetStatus(id);
+      unwrapResponse(result);
+      servers.update((list) =>
+        list.map((s) =>
+          s.id === id ? { ...s, status: "connected" as const } : s,
+        ),
+      );
+      selectedServerId.set(id);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      servers.update((list) =>
+        list.map((s) =>
+          s.id === id ? { ...s, status: "offline" as const } : s,
+        ),
+      );
+      showToast(`Connection failed: ${msg}`, "error");
+    } finally {
+      connecting = null;
+    }
   }
 
   async function handleRefreshStatus() {
@@ -202,6 +225,7 @@
             onDeleteServer={handleDeleteServer}
             onToggleView={toggleViewMode}
             onConfigureLocal={handleConfigureLocal}
+            {connecting}
           />
         {/if}
       {:else if selected}
@@ -213,6 +237,7 @@
           onViewConfig={handleViewConfig}
           onEditServer={handleEditServer}
           onDeleteServer={handleDeleteServer}
+          onBack={() => selectedServerId.set(null)}
           {refreshTrigger}
         />
       {:else}
@@ -288,6 +313,7 @@
 {/if}
 
 <ThemeToggle />
+<Toaster />
 
 <style lang="scss">
   .app-layout {

@@ -9,6 +9,7 @@
   import Shield from "@lucide/svelte/icons/shield";
   import PanelLeft from "@lucide/svelte/icons/panel-left";
   import Settings from "@lucide/svelte/icons/settings";
+  import Loader2 from "@lucide/svelte/icons/loader-2";
 
   let {
     onSelect,
@@ -17,6 +18,7 @@
     onDeleteServer,
     onToggleView,
     onConfigureLocal,
+    connecting = null,
   }: {
     onSelect: (id: string) => void;
     onAddServer: () => void;
@@ -24,6 +26,7 @@
     onDeleteServer: (id: string) => void;
     onToggleView: () => void;
     onConfigureLocal: () => void;
+    connecting?: string | null;
   } = $props();
 
   let serverList = $derived($servers);
@@ -55,8 +58,9 @@
       <div
         class="server-card"
         style="background-color: var(--bg-secondary); border: 1px solid var(--border);"
-        onclick={() => onSelect(server.id)}
-        onkeydown={(e) => e.key === "Enter" && onSelect(server.id)}
+        onclick={() => connecting !== server.id && onSelect(server.id)}
+        onkeydown={(e) =>
+          e.key === "Enter" && connecting !== server.id && onSelect(server.id)}
         role="button"
         tabindex="0"
       >
@@ -65,7 +69,12 @@
             class="server-card-dot"
             style="background-color: {statusColor(server.status)};"
           ></div>
-          {#if server.isLocal}
+          {#if connecting === server.id}
+            <Loader2
+              class="server-card-icon spin"
+              style="color: var(--accent);"
+            />
+          {:else if server.isLocal}
             <Monitor
               class="server-card-icon"
               style="color: var(--text-muted);"
@@ -253,5 +262,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

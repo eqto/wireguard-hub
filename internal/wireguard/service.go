@@ -186,6 +186,16 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		return status, nil
 	}
 
+	// Verify sudo access before running sudo commands.
+	_, sudoStderr, sudoErr := client.Exec("sudo true")
+	if sudoErr != nil {
+		msg := strings.TrimSpace(sudoStderr)
+		if strings.Contains(msg, "incorrect password attempt") {
+			return models.WGStatus{}, fmt.Errorf("Incorrect password")
+		}
+		return models.WGStatus{}, fmt.Errorf("sudo authentication failed: %s", msg)
+	}
+
 	// 1. Get running interface names and live stats from wg show all dump.
 	runningStats := map[string]models.WGInterface{}
 	stdout, _, _ := client.Exec("sudo wg show all dump")

@@ -2,6 +2,7 @@
   import { X, Plug, Loader2 } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
   import { error, servers } from "../stores/servers";
+  import { showToast } from "../stores/toast";
   import { unwrapResponse } from "../utils";
 
   let {
@@ -24,6 +25,7 @@
   let passphrase = $state(server?.passphrase || "");
   let viaServerId = $state(server?.viaServerId || "");
   let testing = $state(false);
+  let saving = $state(false);
   let testResult = $state<{ success: boolean; message: string } | null>(null);
 
   // Candidates for jump host: exclude the server being edited and servers that
@@ -58,20 +60,37 @@
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!name || !host || !username) return;
-    onSave({
-      id: server?.id || "",
-      name: name,
-      host: host,
-      port: Number(port),
-      username: username,
-      authMethod: authMethod,
-      password: password,
-      privateKey: privateKey,
-      passphrase: passphrase,
-      viaServerId: viaServerId,
-    });
+    saving = true;
+    try {
+      const data = {
+        id: server?.id || "",
+        name: name,
+        host: host,
+        port: Number(port),
+        username: username,
+        authMethod: authMethod,
+        password: password,
+        privateKey: privateKey,
+        passphrase: passphrase,
+        viaServerId: viaServerId,
+      };
+      const result = await ServerService.TestConnection(data);
+      const r = unwrapResponse(result);
+      if (!r.success) {
+        showToast(`Cannot save: ${r.message}`, "error");
+        testResult = { success: false, message: r.message };
+        return;
+      }
+      onSave(data);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      showToast(`Connection test failed: ${msg}`, "error");
+      testResult = { success: false, message: msg };
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -232,9 +251,12 @@
         </button>
         <button
           onclick={handleSave}
-          disabled={!name || !host || !username}
+          disabled={!name || !host || !username || saving}
           class="btn btn-primary"
         >
+          {#if saving}
+            <Loader2 class="icon spin" />
+          {/if}
           {server ? "Update" : "Add"}
         </button>
       </div>

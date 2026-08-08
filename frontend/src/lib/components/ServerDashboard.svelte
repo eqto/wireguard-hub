@@ -3,6 +3,7 @@
   import { Events } from "@wailsio/runtime";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { servers, loading, error } from "../stores/servers";
+  import { showToast } from "../stores/toast";
   import { formatBytes, unwrapResponse, sortIPs } from "../utils";
   import StatusBadge from "./StatusBadge.svelte";
   import PeerTable from "./PeerTable.svelte";

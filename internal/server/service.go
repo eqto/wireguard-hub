@@ -417,6 +417,17 @@ func (s *Service) SetLocalSessionCredentials(username, password string) (bool, e
 	return true, nil
 }
 
+func (s *Service) ClearLocalSessionCredentials() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Reload from disk so only persisted config remains.
+	s.loadLocalConfig()
+	s.localClient = nil
+
+	return true, nil
+}
+
 func (s *Service) disconnectClient(serverID string) {
 	if client, ok := s.clients[serverID]; ok {
 		client.Close()
