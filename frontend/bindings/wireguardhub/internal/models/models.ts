@@ -62,6 +62,7 @@ export interface UpdatePeerMetaRequest {
     "serverId": string;
     "interface": string;
     "publicKey": string;
+    "newPublicKey"?: string;
     "name"?: string;
     "description"?: string;
     "endpoint"?: string;

@@ -808,6 +808,10 @@ func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error)
 		updatedConf = updatePeerFieldInConfig(updatedConf, req.PublicKey, "AllowedIPs", strings.Join(req.AllowedIPs, ","))
 	}
 
+	if req.NewPublicKey != "" && req.NewPublicKey != req.PublicKey {
+		updatedConf = updatePeerFieldInConfig(updatedConf, req.PublicKey, "PublicKey", req.NewPublicKey)
+	}
+
 	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), updatedConf)
 	if err != nil {
 		return false, fmt.Errorf("failed to write config: %s: %w", stderr, err)

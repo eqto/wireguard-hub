@@ -375,6 +375,15 @@
                   Port {iface.listenPort}
                 </span>
               {/if}
+              {#if iface.online}
+                <span
+                  class="rx-tx-stat"
+                  title="Receive / Transfer"
+                  style="color: var(--text-muted);"
+                >
+                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
+                </span>
+              {/if}
             </div>
             <div class="interface-actions">
               {#if !iface.online}
@@ -426,35 +435,17 @@
                 Public Key
               </div>
               <div
-                class="stat-value-mono"
+                class="stat-value-mono stat-value-full"
                 style="color: var(--text-secondary);"
                 title={iface.publicKey}
               >
                 {#if iface.publicKey}
-                  {iface.publicKey?.slice(0, 20)}...
+                  {iface.publicKey}
                 {:else}
                   (not running)
                 {/if}
               </div>
             </div>
-            {#if iface.online}
-              <div>
-                <div class="stat-label" style="color: var(--text-muted);">
-                  RX
-                </div>
-                <div class="stat-value" style="color: var(--text-secondary);">
-                  {formatBytes(iface.rxBytes)}
-                </div>
-              </div>
-              <div>
-                <div class="stat-label" style="color: var(--text-muted);">
-                  TX
-                </div>
-                <div class="stat-value" style="color: var(--text-secondary);">
-                  {formatBytes(iface.txBytes)}
-                </div>
-              </div>
-            {/if}
           </div>
 
           {#if !iface.online}
@@ -467,7 +458,7 @@
                         class="server-peer-name"
                         style="color: var(--text-primary);"
                       >
-                        {peer.name || peer.publicKey?.slice(0, 20) + "..."}
+                        {peer.name || peer.publicKey}
                       </div>
                       <div
                         class="server-peer-detail"
@@ -519,6 +510,15 @@
                   Client Mode
                 </span>
               {/if}
+              {#if iface.online}
+                <span
+                  class="rx-tx-stat"
+                  title="Receive / Transfer"
+                  style="color: var(--text-muted);"
+                >
+                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
+                </span>
+              {/if}
             </div>
             <div class="interface-actions">
               {#if !iface.online}
@@ -562,35 +562,17 @@
                 Public Key
               </div>
               <div
-                class="stat-value-mono"
+                class="stat-value-mono stat-value-full"
                 style="color: var(--text-secondary);"
                 title={iface.publicKey}
               >
                 {#if iface.publicKey}
-                  {iface.publicKey?.slice(0, 20)}...
+                  {iface.publicKey}
                 {:else}
                   (not running)
                 {/if}
               </div>
             </div>
-            {#if iface.online}
-              <div>
-                <div class="stat-label" style="color: var(--text-muted);">
-                  RX
-                </div>
-                <div class="stat-value" style="color: var(--text-secondary);">
-                  {formatBytes(iface.rxBytes)}
-                </div>
-              </div>
-              <div>
-                <div class="stat-label" style="color: var(--text-muted);">
-                  TX
-                </div>
-                <div class="stat-value" style="color: var(--text-secondary);">
-                  {formatBytes(iface.txBytes)}
-                </div>
-              </div>
-            {/if}
           </div>
 
           <!-- Server peer block: always shown, even when empty -->
@@ -634,9 +616,9 @@
                         style="color: var(--text-muted);">Public Key:</span
                       >
                       <span
-                        class="stat-value-mono"
+                        class="stat-value-mono stat-value-full"
                         style="color: var(--text-secondary);"
-                        >{peer.publicKey?.slice(0, 20)}...</span
+                        >{peer.publicKey}</span
                       >
                     </div>
                   </div>
@@ -809,6 +791,12 @@
         border-radius: 9999px;
       }
 
+      .rx-tx-stat {
+        font-size: 12px;
+        font-family: "Courier New", monospace;
+        white-space: nowrap;
+      }
+
       .interface-actions {
         display: flex;
         align-items: center;
@@ -818,7 +806,7 @@
 
     .interface-stats {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 16px;
       margin-bottom: 16px;
 
@@ -836,6 +824,13 @@
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+
+        &-full {
+          word-break: break-all;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
         }
       }
     }

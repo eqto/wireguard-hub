@@ -38,6 +38,9 @@
         description: description,
       };
       if (isClientInterface) {
+        if (publicKey !== peer.publicKey) {
+          req.newPublicKey = publicKey;
+        }
         if (endpoint) req.endpoint = endpoint;
         if (allowedIPs.trim()) {
           req.allowedIPs = allowedIPs
@@ -74,7 +77,7 @@
   >
     <div class="modal-header">
       <h2 class="modal-title">
-        {isClientInterface ? "Edit Server Peer" : "Edit Peer"}
+        {isClientInterface ? "Server Configuration" : "Edit Peer"}
       </h2>
       <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
@@ -82,12 +85,22 @@
     </div>
 
     <div class="modal-body">
-      <div class="peer-key-info" style="color: var(--text-muted);">
-        <span class="peer-key-label">Public Key:</span>
-        <span class="peer-key-value"
-          >{publicKey?.slice(0, 20) || "(none)"}{publicKey ? "..." : ""}</span
-        >
-      </div>
+      {#if isClientInterface}
+        <div class="form-group">
+          <label class="label">Public Key</label>
+          <input
+            bind:value={publicKey}
+            type="text"
+            placeholder="(none)"
+            class="input input-mono"
+          />
+        </div>
+      {:else}
+        <div class="peer-key-info" style="color: var(--text-muted);">
+          <span class="peer-key-label">Public Key:</span>
+          <span class="peer-key-value">{publicKey || "(none)"}</span>
+        </div>
+      {/if}
 
       {#if isClientInterface}
         <div class="form-group">
