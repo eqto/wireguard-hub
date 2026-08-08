@@ -572,6 +572,20 @@ func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
 	return true, nil
 }
 
+func (s *Service) BringDownInterface(serverID string, name string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s", name))
+	if err != nil {
+		return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
+	}
+
+	return true, nil
+}
+
 func (s *Service) DeleteInterface(serverID string, name string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {

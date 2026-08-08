@@ -140,6 +140,15 @@
     }
   }
 
+  async function handleBringDown(iface: string) {
+    try {
+      await WireguardService.BringDownInterface(serverId, iface);
+      await loadStatus();
+    } catch (e: any) {
+      error.set(e?.message || String(e));
+    }
+  }
+
   async function handleRemovePeer(iface: string, publicKey: string) {
     try {
       await WireguardService.RemovePeer(serverId, iface, publicKey);
@@ -387,6 +396,13 @@
                 </button>
               {:else}
                 <button
+                  onclick={() => handleBringDown(iface.name)}
+                  class="btn btn-primary btn-small"
+                >
+                  <Power class="icon-sm" />
+                  Bring Down
+                </button>
+                <button
                   onclick={() => onAddPeer(iface.name, false)}
                   class="btn btn-primary btn-small"
                 >
@@ -525,6 +541,14 @@
                 >
                   <Power class="icon-sm" />
                   Bring Up
+                </button>
+              {:else}
+                <button
+                  onclick={() => handleBringDown(iface.name)}
+                  class="btn btn-primary btn-small"
+                >
+                  <Power class="icon-sm" />
+                  Bring Down
                 </button>
               {/if}
               {#if iface.online}
