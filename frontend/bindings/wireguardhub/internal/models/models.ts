@@ -75,6 +75,7 @@ export interface WGInterface {
     "rxBytes": number;
     "txBytes": number;
     "peers": WGPeer[] | null;
+    "online": boolean;
 }
 
 export interface WGPeer {

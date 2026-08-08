@@ -13,6 +13,10 @@ export function AddPeer(req: models$0.AddPeerRequest): $CancellablePromise<model
     return $Call.ByID(3098433953, req);
 }
 
+export function BringUpInterface(serverID: string, name: string): $CancellablePromise<boolean> {
+    return $Call.ByID(3850547026, serverID, name);
+}
+
 export function CancelInstall(): $CancellablePromise<boolean> {
     return $Call.ByID(3154375407);
 }

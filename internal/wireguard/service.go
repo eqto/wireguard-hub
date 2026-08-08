@@ -3,6 +3,7 @@ package wireguard
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -187,12 +188,21 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 			return status, nil
 		}
 		_ = stderr
+		// wg is installed but no interfaces are running; scan for config-only interfaces.
 		status := models.WGStatus{Interfaces: []models.WGInterface{}}
+		status.Interfaces = scanOfflineInterfaces(client, nil)
 		s.fillServerInfo(serverID, client, &status)
 		return status, nil
 	}
 
 	status := parseWGDump(stdout)
+
+	// Mark all running interfaces as online.
+	runningNames := make(map[string]bool)
+	for i := range status.Interfaces {
+		status.Interfaces[i].Online = true
+		runningNames[status.Interfaces[i].Name] = true
+	}
 
 	// Merge peer metadata from config files on the server.
 	for i := range status.Interfaces {
@@ -208,6 +218,9 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 			}
 		}
 	}
+
+	// Find offline interfaces: config files in /etc/wireguard/ not in the running list.
+	status.Interfaces = append(status.Interfaces, scanOfflineInterfaces(client, runningNames)...)
 
 	s.fillServerInfo(serverID, client, &status)
 
@@ -393,6 +406,29 @@ func parsePeerMeta(configText string) map[string]models.WGPeer {
 	return result
 }
 
+func scanOfflineInterfaces(client ssh.Executor, runningNames map[string]bool) []models.WGInterface {
+	var offline []models.WGInterface
+	confListOut, _, _ := client.Exec("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
+	for _, confPath := range strings.Split(strings.TrimSpace(confListOut), "\n") {
+		confPath = strings.TrimSpace(confPath)
+		if confPath == "" {
+			continue
+		}
+		base := filepath.Base(confPath)
+		ifaceName := strings.TrimSuffix(base, ".conf")
+		if runningNames != nil && runningNames[ifaceName] {
+			continue
+		}
+		confText, _, confErr := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
+		if confErr != nil {
+			continue
+		}
+		offlineIface := parseInterfaceConfig(confText, ifaceName)
+		offline = append(offline, offlineIface)
+	}
+	return offline
+}
+
 func configHasListenPort(configText string) bool {
 	for _, line := range strings.Split(configText, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -401,6 +437,89 @@ func configHasListenPort(configText string) bool {
 		}
 	}
 	return false
+}
+
+func parseInterfaceConfig(configText, ifaceName string) models.WGInterface {
+	iface := models.WGInterface{
+		Name:   ifaceName,
+		Online: false,
+		Peers:  []models.WGPeer{},
+	}
+
+	inPeerSection := false
+	var currentPeer *models.WGPeer
+
+	for _, line := range strings.Split(configText, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "[Peer]" {
+			if currentPeer != nil {
+				iface.Peers = append(iface.Peers, *currentPeer)
+			}
+			currentPeer = &models.WGPeer{AllowedIPs: []string{}}
+			inPeerSection = true
+			continue
+		}
+
+		if trimmed == "[Interface]" {
+			if currentPeer != nil {
+				iface.Peers = append(iface.Peers, *currentPeer)
+				currentPeer = nil
+			}
+			inPeerSection = false
+			continue
+		}
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "# Name") && !strings.HasPrefix(trimmed, "# Description") {
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+
+		if !inPeerSection {
+			switch key {
+			case "PrivateKey":
+				iface.PrivateKey = val
+			case "ListenPort":
+				iface.ListenPort, _ = strconv.Atoi(val)
+			case "Endpoint":
+				iface.Endpoint = val
+			}
+		} else if currentPeer != nil {
+			switch key {
+			case "PublicKey":
+				currentPeer.PublicKey = val
+			case "Endpoint":
+				currentPeer.Endpoint = val
+			case "AllowedIPs":
+				for _, ip := range strings.Split(val, ",") {
+					ip = strings.TrimSpace(ip)
+					if ip != "" {
+						currentPeer.AllowedIPs = append(currentPeer.AllowedIPs, ip)
+					}
+				}
+			case "PresharedKey":
+				currentPeer.PresharedKey = val
+			case "PersistentKeepalive":
+				currentPeer.PersistentKeepalive, _ = strconv.Atoi(val)
+			case "# Name":
+				currentPeer.Name = val
+			case "# Description":
+				currentPeer.Description = val
+			}
+		}
+	}
+
+	if currentPeer != nil {
+		iface.Peers = append(iface.Peers, *currentPeer)
+	}
+
+	return iface
 }
 
 func parseTimestamp(s string) time.Time {
@@ -493,6 +612,20 @@ func (s *Service) CreateInterface(req models.CreateInterfaceRequest) (models.WGI
 		Endpoint:   req.Endpoint,
 		Peers:      []models.WGPeer{},
 	}, nil
+}
+
+func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick up %s", name))
+	if err != nil {
+		return false, fmt.Errorf("failed to bring up interface: %s: %w", stderr, err)
+	}
+
+	return true, nil
 }
 
 func (s *Service) DeleteInterface(serverID string, name string) (bool, error) {

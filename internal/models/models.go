@@ -31,6 +31,7 @@ type WGInterface struct {
 	RxBytes    int64    `yaml:"rxBytes" json:"rxBytes"`
 	TxBytes    int64    `yaml:"txBytes" json:"txBytes"`
 	Peers      []WGPeer `yaml:"peers" json:"peers"`
+	Online     bool     `yaml:"online" json:"online"`
 }
 
 type WGPeer struct {
