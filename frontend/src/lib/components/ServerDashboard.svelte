@@ -375,15 +375,6 @@
                   Port {iface.listenPort}
                 </span>
               {/if}
-              {#if iface.online}
-                <span
-                  class="rx-tx-stat"
-                  title="Receive / Transfer"
-                  style="color: var(--text-muted);"
-                >
-                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
-                </span>
-              {/if}
             </div>
             <div class="interface-actions">
               {#if !iface.online}
@@ -402,6 +393,15 @@
                   <Plus class="icon-sm" />
                   Add Peer
                 </button>
+              {/if}
+              {#if iface.online}
+                <span
+                  class="rx-tx-stat"
+                  title="Receive / Transfer"
+                  style="color: var(--text-muted);"
+                >
+                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
+                </span>
               {/if}
               <button
                 onclick={() => handleViewConfig(iface.name)}
@@ -510,15 +510,6 @@
                   Client Mode
                 </span>
               {/if}
-              {#if iface.online}
-                <span
-                  class="rx-tx-stat"
-                  title="Receive / Transfer"
-                  style="color: var(--text-muted);"
-                >
-                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
-                </span>
-              {/if}
             </div>
             <div class="interface-actions">
               {#if !iface.online}
@@ -529,6 +520,15 @@
                   <Power class="icon-sm" />
                   Bring Up
                 </button>
+              {/if}
+              {#if iface.online}
+                <span
+                  class="rx-tx-stat"
+                  title="Receive / Transfer"
+                  style="color: var(--text-muted);"
+                >
+                  {formatBytes(iface.rxBytes)} / {formatBytes(iface.txBytes)}
+                </span>
               {/if}
               <button
                 onclick={() => handleViewConfig(iface.name)}
@@ -791,16 +791,18 @@
         border-radius: 9999px;
       }
 
-      .rx-tx-stat {
-        font-size: 12px;
-        font-family: "Courier New", monospace;
-        white-space: nowrap;
-      }
-
       .interface-actions {
         display: flex;
         align-items: center;
         gap: 4px;
+      }
+
+      .rx-tx-stat {
+        font-size: 12px;
+        font-family: "Courier New", monospace;
+        white-space: nowrap;
+        margin-left: 8px;
+        margin-right: 4px;
       }
     }
 
