@@ -2,11 +2,13 @@
   import { servers } from "../stores/servers";
   import { statusColor } from "../utils";
   import Server from "@lucide/svelte/icons/server";
+  import Monitor from "@lucide/svelte/icons/monitor";
   import Plus from "@lucide/svelte/icons/plus";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Shield from "@lucide/svelte/icons/shield";
   import PanelLeft from "@lucide/svelte/icons/panel-left";
+  import Settings from "@lucide/svelte/icons/settings";
 
   let {
     onSelect,
@@ -14,12 +16,14 @@
     onEditServer,
     onDeleteServer,
     onToggleView,
+    onConfigureLocal,
   }: {
     onSelect: (id: string) => void;
     onAddServer: () => void;
     onEditServer: (server: any) => void;
     onDeleteServer: (id: string) => void;
     onToggleView: () => void;
+    onConfigureLocal: () => void;
   } = $props();
 
   let serverList = $derived($servers);
@@ -32,7 +36,11 @@
       <h1 class="server-grid-title" style="color: var(--text-primary);">
         WireguardHub
       </h1>
-      <button onclick={onToggleView} class="grid-toggle-btn" title="Switch to sidebar view">
+      <button
+        onclick={onToggleView}
+        class="grid-toggle-btn"
+        title="Switch to sidebar view"
+      >
         <PanelLeft class="icon" style="color: var(--text-secondary);" />
       </button>
     </div>
@@ -57,35 +65,65 @@
             class="server-card-dot"
             style="background-color: {statusColor(server.status)};"
           ></div>
-          <Server class="server-card-icon" style="color: var(--text-muted);" />
+          {#if server.isLocal}
+            <Monitor
+              class="server-card-icon"
+              style="color: var(--text-muted);"
+            />
+          {:else}
+            <Server
+              class="server-card-icon"
+              style="color: var(--text-muted);"
+            />
+          {/if}
           <div class="server-card-actions">
-            <button
-              class="server-card-action-btn"
-              onclick={(e) => {
-                e.stopPropagation();
-                onEditServer(server);
-              }}
-              title="Edit"
-            >
-              <Pencil class="icon-sm" style="color: var(--text-secondary);" />
-            </button>
-            <button
-              class="server-card-action-btn"
-              onclick={(e) => {
-                e.stopPropagation();
-                onDeleteServer(server.id);
-              }}
-              title="Delete"
-            >
-              <Trash2 class="icon-sm" style="color: var(--danger);" />
-            </button>
+            {#if server.isLocal}
+              <button
+                class="server-card-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onConfigureLocal();
+                }}
+                title="Configure"
+              >
+                <Settings
+                  class="icon-sm"
+                  style="color: var(--text-secondary);"
+                />
+              </button>
+            {:else}
+              <button
+                class="server-card-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onEditServer(server);
+                }}
+                title="Edit"
+              >
+                <Pencil class="icon-sm" style="color: var(--text-secondary);" />
+              </button>
+              <button
+                class="server-card-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onDeleteServer(server.id);
+                }}
+                title="Delete"
+              >
+                <Trash2 class="icon-sm" style="color: var(--danger);" />
+              </button>
+            {/if}
           </div>
         </div>
         <div class="server-card-name" style="color: var(--text-primary);">
           {server.name}
         </div>
         <div class="server-card-host" style="color: var(--text-muted);">
-          {server.username}@{server.host}:{server.port}
+          {#if server.isLocal}
+            This machine
+          {:else}
+            {server.username}@{server.host}:{server.port}
+          {/if}
         </div>
       </div>
     {/each}
@@ -145,7 +183,9 @@
     border-radius: 12px;
     padding: 20px;
     cursor: pointer;
-    transition: border-color 0.15s, transform 0.1s;
+    transition:
+      border-color 0.15s,
+      transform 0.1s;
 
     &:hover {
       border-color: var(--accent);

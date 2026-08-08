@@ -39,14 +39,18 @@ func (c *Client) emit(e ExecEvent) {
 	}
 }
 
-func Connect(server models.ServerConfig, jump *Client) (*Client, error) {
+func Connect(server models.ServerConfig, jump Executor) (*Client, error) {
 	config, addr, err := buildClientConfig(server)
 	if err != nil {
 		return nil, err
 	}
 
 	if jump != nil {
-		conn, err := jump.client.Dial("tcp", addr)
+		sshClient, ok := jump.(*Client)
+		if !ok {
+			return nil, fmt.Errorf("jump host must be an SSH client")
+		}
+		conn, err := sshClient.client.Dial("tcp", addr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to dial %s through jump server: %w", addr, err)
 		}
@@ -163,8 +167,8 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 }
 
 // ExecStreaming runs a command and calls onLine for each line of stdout/stderr.
-// Returns the session (can be closed to cancel) and error from Run.
-func (c *Client) ExecStreaming(cmd string, onLine func(string)) (*ssh.Session, error) {
+// Returns an io.Closer (the underlying session, can be closed to cancel) and error from Run.
+func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, error) {
 	c.emit(ExecEvent{Kind: "command", Command: cmd})
 
 	session, err := c.client.NewSession()
@@ -241,7 +245,7 @@ func (c *Client) IsConnected() bool {
 	return session.Run("true") == nil
 }
 
-func TestConnection(server models.ServerConfig, jump *Client) (*models.TestConnectionResult, error) {
+func TestConnection(server models.ServerConfig, jump Executor) (*models.TestConnectionResult, error) {
 	client, err := Connect(server, jump)
 	if err != nil {
 		return &models.TestConnectionResult{

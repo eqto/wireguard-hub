@@ -2,11 +2,13 @@
   import { servers, selectedServerId, loading } from "../stores/servers";
   import { statusColor } from "../utils";
   import Server from "@lucide/svelte/icons/server";
+  import Monitor from "@lucide/svelte/icons/monitor";
   import Plus from "@lucide/svelte/icons/plus";
   import Pencil from "@lucide/svelte/icons/pencil";
   import Trash2 from "@lucide/svelte/icons/trash-2";
   import Shield from "@lucide/svelte/icons/shield";
   import LayoutGrid from "@lucide/svelte/icons/layout-grid";
+  import Settings from "@lucide/svelte/icons/settings";
 
   let {
     onAddServer,
@@ -14,12 +16,14 @@
     onEditServer,
     onDeleteServer,
     onToggleView,
+    onConfigureLocal,
   }: {
     onAddServer: () => void;
     onSelect: (id: string) => void;
     onEditServer: (server: any) => void;
     onDeleteServer: (id: string) => void;
     onToggleView: () => void;
+    onConfigureLocal: () => void;
   } = $props();
 
   let serverList = $derived($servers);
@@ -39,7 +43,11 @@
     <span class="sidebar-title" style="color: var(--text-primary);"
       >WireguardHub</span
     >
-    <button onclick={onToggleView} class="sidebar-toggle-btn" title="Switch to grid view">
+    <button
+      onclick={onToggleView}
+      class="sidebar-toggle-btn"
+      title="Switch to grid view"
+    >
       <LayoutGrid class="icon" style="color: var(--text-secondary);" />
     </button>
   </div>
@@ -76,37 +84,59 @@
               {server.name}
             </div>
             <div class="server-host" style="color: var(--text-muted);">
-              {server.host}:{server.port}{#if server.viaServerId}
-                <span class="server-via">via {jumpName(server.viaServerId, serverList)}</span>{/if}
+              {#if server.isLocal}
+                This machine
+              {:else}
+                {server.host}:{server.port}{#if server.viaServerId}
+                  <span class="server-via"
+                    >via {jumpName(server.viaServerId, serverList)}</span
+                  >{/if}
+              {/if}
             </div>
           </div>
           <div class="server-actions">
-            <button
-              class="server-action-btn"
-              onclick={(e) => {
-                e.stopPropagation();
-                onEditServer(server);
-              }}
-              title="Edit"
-            >
-              <Pencil
-                class="server-action-icon"
-                style="color: var(--text-secondary);"
-              />
-            </button>
-            <button
-              class="server-action-btn"
-              onclick={(e) => {
-                e.stopPropagation();
-                onDeleteServer(server.id);
-              }}
-              title="Delete"
-            >
-              <Trash2
-                class="server-action-icon"
-                style="color: var(--danger);"
-              />
-            </button>
+            {#if server.isLocal}
+              <button
+                class="server-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onConfigureLocal();
+                }}
+                title="Configure"
+              >
+                <Settings
+                  class="server-action-icon"
+                  style="color: var(--text-secondary);"
+                />
+              </button>
+            {:else}
+              <button
+                class="server-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onEditServer(server);
+                }}
+                title="Edit"
+              >
+                <Pencil
+                  class="server-action-icon"
+                  style="color: var(--text-secondary);"
+                />
+              </button>
+              <button
+                class="server-action-btn"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  onDeleteServer(server.id);
+                }}
+                title="Delete"
+              >
+                <Trash2
+                  class="server-action-icon"
+                  style="color: var(--danger);"
+                />
+              </button>
+            {/if}
           </div>
         </div>
       {/each}

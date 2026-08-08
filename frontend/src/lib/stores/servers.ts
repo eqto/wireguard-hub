@@ -10,6 +10,7 @@ export interface ServerState {
   username: string
   authMethod: string
   viaServerId?: string
+  isLocal?: boolean
   status: ServerStatus
 }
 

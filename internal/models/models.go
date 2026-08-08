@@ -3,16 +3,23 @@ package models
 import "time"
 
 type ServerConfig struct {
-	ID         string `yaml:"id" json:"id"`
-	Name       string `yaml:"name" json:"name"`
-	Host       string `yaml:"host" json:"host"`
-	Port       int    `yaml:"port" json:"port"`
-	Username   string `yaml:"username" json:"username"`
-	AuthMethod string `yaml:"authMethod" json:"authMethod"`
-	Password   string `yaml:"password,omitempty" json:"password,omitempty"`
-	PrivateKey string `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
-	Passphrase string `yaml:"passphrase,omitempty" json:"passphrase,omitempty"`
+	ID          string `yaml:"id" json:"id"`
+	Name        string `yaml:"name" json:"name"`
+	Host        string `yaml:"host" json:"host"`
+	Port        int    `yaml:"port" json:"port"`
+	Username    string `yaml:"username" json:"username"`
+	AuthMethod  string `yaml:"authMethod" json:"authMethod"`
+	Password    string `yaml:"password,omitempty" json:"password,omitempty"`
+	PrivateKey  string `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
+	Passphrase  string `yaml:"passphrase,omitempty" json:"passphrase,omitempty"`
 	ViaServerID string `yaml:"viaServerId,omitempty" json:"viaServerId,omitempty"`
+	IsLocal     bool   `yaml:"isLocal,omitempty" json:"isLocal,omitempty"`
+}
+
+type LocalConfig struct {
+	Username   string `yaml:"username" json:"username"`
+	Password   string `yaml:"password,omitempty" json:"password,omitempty"`
+	Configured bool   `yaml:"-" json:"configured"`
 }
 
 type WGInterface struct {
@@ -27,16 +34,16 @@ type WGInterface struct {
 }
 
 type WGPeer struct {
-	PublicKey          string    `yaml:"publicKey" json:"publicKey"`
-	PresharedKey       string    `yaml:"presharedKey,omitempty" json:"presharedKey,omitempty"`
-	Endpoint           string    `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	AllowedIPs         []string  `yaml:"allowedIPs" json:"allowedIPs"`
-	LatestHandshake    time.Time `yaml:"latestHandshake" json:"latestHandshake"`
-	RxBytes            int64     `yaml:"rxBytes" json:"rxBytes"`
-	TxBytes            int64     `yaml:"txBytes" json:"txBytes"`
-	PersistentKeepalive int      `yaml:"persistentKeepalive,omitempty" json:"persistentKeepalive,omitempty"`
-	Name               string    `yaml:"name,omitempty" json:"name,omitempty"`
-	Description        string    `yaml:"description,omitempty" json:"description,omitempty"`
+	PublicKey           string    `yaml:"publicKey" json:"publicKey"`
+	PresharedKey        string    `yaml:"presharedKey,omitempty" json:"presharedKey,omitempty"`
+	Endpoint            string    `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	AllowedIPs          []string  `yaml:"allowedIPs" json:"allowedIPs"`
+	LatestHandshake     time.Time `yaml:"latestHandshake" json:"latestHandshake"`
+	RxBytes             int64     `yaml:"rxBytes" json:"rxBytes"`
+	TxBytes             int64     `yaml:"txBytes" json:"txBytes"`
+	PersistentKeepalive int       `yaml:"persistentKeepalive,omitempty" json:"persistentKeepalive,omitempty"`
+	Name                string    `yaml:"name,omitempty" json:"name,omitempty"`
+	Description         string    `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 type WGStatus struct {
@@ -66,13 +73,13 @@ type AddPeerResult struct {
 }
 
 type CreateInterfaceRequest struct {
-	ServerID    string   `yaml:"serverId" json:"serverId"`
-	Name        string   `yaml:"name" json:"name"`
-	ListenPort  int      `yaml:"listenPort" json:"listenPort"`
-	PrivateKey  string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
-	Endpoint    string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	AllowedIPs  []string `yaml:"allowedIPs,omitempty" json:"allowedIPs,omitempty"`
-	Address     string   `yaml:"address,omitempty" json:"address,omitempty"`
+	ServerID   string   `yaml:"serverId" json:"serverId"`
+	Name       string   `yaml:"name" json:"name"`
+	ListenPort int      `yaml:"listenPort" json:"listenPort"`
+	PrivateKey string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
+	Endpoint   string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	AllowedIPs []string `yaml:"allowedIPs,omitempty" json:"allowedIPs,omitempty"`
+	Address    string   `yaml:"address,omitempty" json:"address,omitempty"`
 }
 
 type KeyPair struct {

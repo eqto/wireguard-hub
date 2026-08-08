@@ -33,6 +33,12 @@ export interface KeyPair {
     "privateKey": string;
 }
 
+export interface LocalConfig {
+    "username": string;
+    "password"?: string;
+    "configured": boolean;
+}
+
 export interface ServerConfig {
     "id": string;
     "name": string;
@@ -44,6 +50,7 @@ export interface ServerConfig {
     "privateKey"?: string;
     "passphrase"?: string;
     "viaServerId"?: string;
+    "isLocal"?: boolean;
 }
 
 export interface TestConnectionResult {

@@ -9,6 +9,7 @@
   import ConfigViewer from "./lib/components/ConfigViewer.svelte";
   import Terminal from "./lib/components/Terminal.svelte";
   import ThemeToggle from "./lib/components/ThemeToggle.svelte";
+  import LocalSetupModal from "./lib/components/LocalSetupModal.svelte";
   import {
     initTheme,
     servers,
@@ -28,6 +29,7 @@
   let showConfigViewer = $state(false);
   let configData = $state({ name: "", content: "" });
   let peerInterface = $state("");
+  let showLocalSetup = $state(false);
 
   onMount(async () => {
     initTheme();
@@ -54,6 +56,19 @@
   }
 
   async function handleSelectServer(id: string) {
+    if (id === "local") {
+      try {
+        const result = await ServerService.GetLocalConfig();
+        const cfg = unwrapResponse(result);
+        if (!cfg?.configured) {
+          showLocalSetup = true;
+          return;
+        }
+      } catch {
+        showLocalSetup = true;
+        return;
+      }
+    }
     selectedServerId.set(id);
   }
 
@@ -133,6 +148,10 @@
     showConfigViewer = true;
   }
 
+  function handleConfigureLocal() {
+    showLocalSetup = true;
+  }
+
   let selected = $derived($selectedServerId);
 
   let viewMode = $state<"grid" | "sidebar">(
@@ -156,6 +175,7 @@
         onEditServer={handleEditServer}
         onDeleteServer={handleDeleteServer}
         onToggleView={toggleViewMode}
+        onConfigureLocal={handleConfigureLocal}
       />
     {/if}
     <main class="app-main">
@@ -179,6 +199,7 @@
             onEditServer={handleEditServer}
             onDeleteServer={handleDeleteServer}
             onToggleView={toggleViewMode}
+            onConfigureLocal={handleConfigureLocal}
           />
         {/if}
       {:else if selected}
@@ -249,6 +270,17 @@
     name={configData.name}
     content={configData.content}
     onClose={() => (showConfigViewer = false)}
+  />
+{/if}
+
+{#if showLocalSetup}
+  <LocalSetupModal
+    onSave={() => {}}
+    onConfigured={() => {
+      showLocalSetup = false;
+      selectedServerId.set("local");
+    }}
+    onClose={() => (showLocalSetup = false)}
   />
 {/if}
 

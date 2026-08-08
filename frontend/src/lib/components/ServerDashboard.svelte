@@ -188,7 +188,11 @@
     <div class="dashboard-header">
       <div class="dashboard-title-row">
         {#if onBack}
-          <button onclick={onBack} class="btn-icon back-btn" title="Back to servers">
+          <button
+            onclick={onBack}
+            class="btn-icon back-btn"
+            title="Back to servers"
+          >
             <ArrowLeft class="icon" style="color: var(--text-secondary);" />
           </button>
         {/if}
@@ -197,7 +201,11 @@
             {serverInfo.name}
           </h1>
           <p class="dashboard-subtitle" style="color: var(--text-muted);">
-            {serverInfo.username}@{serverInfo.host}:{serverInfo.port}
+            {#if serverInfo.isLocal}
+              This machine
+            {:else}
+              {serverInfo.username}@{serverInfo.host}:{serverInfo.port}
+            {/if}
           </p>
         </div>
         <StatusBadge status={serverInfo.status} />
@@ -206,17 +214,26 @@
         {#if status}
           <div class="server-endpoint">
             {#if status?.os}
-              <span class="server-endpoint-line" style="color: var(--text-secondary);">
+              <span
+                class="server-endpoint-line"
+                style="color: var(--text-secondary);"
+              >
                 {status.os}
               </span>
             {/if}
             {#if status?.hostname}
-              <span class="server-endpoint-line" style="color: var(--text-secondary);">
+              <span
+                class="server-endpoint-line"
+                style="color: var(--text-secondary);"
+              >
                 {status.hostname}
               </span>
             {/if}
             {#if status?.serverIP}
-              <span class="server-endpoint-line" style="color: var(--text-muted);">
+              <span
+                class="server-endpoint-line"
+                style="color: var(--text-muted);"
+              >
                 {status.serverIP}
               </span>
             {/if}
@@ -234,20 +251,22 @@
           {/if}
           Refresh
         </button>
-        <button
-          onclick={() => onEditServer(serverInfo)}
-          class="btn-icon"
-          title="Edit server"
-        >
-          <Pencil class="icon" style="color: var(--text-secondary);" />
-        </button>
-        <button
-          onclick={() => onDeleteServer(serverInfo.id)}
-          class="btn-icon"
-          title="Delete server"
-        >
-          <Trash2 class="icon" style="color: var(--danger);" />
-        </button>
+        {#if !serverInfo.isLocal}
+          <button
+            onclick={() => onEditServer(serverInfo)}
+            class="btn-icon"
+            title="Edit server"
+          >
+            <Pencil class="icon" style="color: var(--text-secondary);" />
+          </button>
+          <button
+            onclick={() => onDeleteServer(serverInfo.id)}
+            class="btn-icon"
+            title="Delete server"
+          >
+            <Trash2 class="icon" style="color: var(--danger);" />
+          </button>
+        {/if}
       </div>
     </div>
   {/if}
@@ -405,7 +424,7 @@
 
 {#if editingPeer}
   <EditPeerModal
-    serverId={serverId}
+    {serverId}
     interfaceName={editingPeerIface}
     peer={editingPeer}
     onClose={() => {

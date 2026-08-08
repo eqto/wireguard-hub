@@ -6,6 +6,7 @@ export type {
     AddPeerResult,
     CreateInterfaceRequest,
     KeyPair,
+    LocalConfig,
     ServerConfig,
     TestConnectionResult,
     UpdatePeerMetaRequest,

@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,13 +13,12 @@ import (
 	"wireguardhub/internal/ssh"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	cryptossh "golang.org/x/crypto/ssh"
 )
 
 type Service struct {
 	serverSvc *server.Service
 	mu        sync.Mutex
-	session   *cryptossh.Session
+	session   io.Closer
 
 	serverInfoMu    sync.Mutex
 	serverInfoCache map[string]serverInfo
@@ -214,7 +214,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 	return status, nil
 }
 
-func (s *Service) fillServerInfo(serverID string, client *ssh.Client, status *models.WGStatus) {
+func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *models.WGStatus) {
 	s.serverInfoMu.Lock()
 	cached, ok := s.serverInfoCache[serverID]
 	s.serverInfoMu.Unlock()
