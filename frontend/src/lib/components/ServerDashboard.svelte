@@ -666,14 +666,6 @@
                         style="color: var(--text-secondary);"
                       />
                     </button>
-                    <button
-                      onclick={() =>
-                        handleRemovePeer(iface.name, peer.publicKey)}
-                      class="btn-icon btn-icon-small"
-                      title="Remove"
-                    >
-                      <Trash2 class="icon" style="color: var(--danger);" />
-                    </button>
                   </div>
                 </div>
               {/each}

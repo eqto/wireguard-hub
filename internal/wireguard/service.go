@@ -208,7 +208,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 
 	// 2. List all .conf files and parse each one.
 	status := models.WGStatus{Interfaces: []models.WGInterface{}}
-	confListOut, _, _ := client.Exec("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
+	confListOut, _, _ := client.ExecSilent("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
 	for _, confPath := range strings.Split(strings.TrimSpace(confListOut), "\n") {
 		confPath = strings.TrimSpace(confPath)
 		if confPath == "" {
