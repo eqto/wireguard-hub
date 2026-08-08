@@ -64,6 +64,9 @@ export interface UpdatePeerMetaRequest {
     "publicKey": string;
     "name"?: string;
     "description"?: string;
+    "endpoint"?: string;
+    "allowedIPs"?: string[] | null;
+    "restart"?: boolean;
 }
 
 export interface WGInterface {

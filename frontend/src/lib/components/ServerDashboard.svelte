@@ -47,6 +47,7 @@
   let serverInfo = $derived($servers.find((s) => s.id === serverId));
   let editingPeer = $state<any>(null);
   let editingPeerIface = $state("");
+  let editingPeerIsClient = $state(false);
   let deletingInterface = $state<string | null>(null);
   let wgNotInstalled = $state(false);
   let installing = $state(false);
@@ -148,9 +149,10 @@
     }
   }
 
-  function handleEditPeer(iface: string, peer: any) {
+  function handleEditPeer(iface: string, peer: any, isClient = false) {
     editingPeerIface = iface;
     editingPeer = peer;
+    editingPeerIsClient = isClient;
   }
 
   async function handleInstallWG() {
@@ -351,209 +353,344 @@
         class="interface-card"
         style="background-color: var(--bg-secondary); border: 1px solid var(--border);"
       >
-        <div class="interface-header">
-          <div class="interface-title-row">
-            <h2 class="interface-name" style="color: var(--text-primary);">
-              {iface.name}
-            </h2>
-            {#if !iface.online}
-              <span
-                class="interface-port"
-                style="background-color: rgba(220,38,38,0.1); color: var(--danger);"
-              >
-                Offline
-              </span>
-            {:else if iface.listenPort > 0}
-              <span
-                class="interface-port"
-                style="background-color: var(--bg-tertiary); color: var(--text-muted);"
-              >
-                Port {iface.listenPort}
-              </span>
-            {:else}
-              <span
-                class="interface-port"
-                style="background-color: var(--bg-tertiary); color: var(--text-muted);"
-              >
-                Client Mode
-              </span>
-            {/if}
-          </div>
-          <div class="interface-actions">
-            {#if !iface.online}
-              <button
-                onclick={() => handleBringUp(iface.name)}
-                class="btn btn-primary btn-small"
-              >
-                <Power class="icon-sm" />
-                Bring Up
-              </button>
-            {:else if iface.listenPort > 0}
-              <button
-                onclick={() => onAddPeer(iface.name, false)}
-                class="btn btn-primary btn-small"
-              >
-                <Plus class="icon-sm" />
-                Add Peer
-              </button>
-            {:else if !iface.peers || iface.peers.length === 0}
-              <button
-                onclick={() => onAddPeer(iface.name, true)}
-                class="btn btn-primary btn-small"
-              >
-                <Plus class="icon-sm" />
-                Add Server Peer
-              </button>
-            {/if}
-            <button
-              onclick={() => handleViewConfig(iface.name)}
-              class="btn-icon btn-icon-small"
-              title="View Config"
-            >
-              <FileText class="icon" style="color: var(--text-secondary);" />
-            </button>
-            {#if iface.online}
-              <button
-                onclick={() => handleSyncConfig(iface.name)}
-                class="btn-icon btn-icon-small"
-                title="Sync Config"
-              >
-                <Sync class="icon" style="color: var(--text-secondary);" />
-              </button>
-            {/if}
-            <button
-              onclick={() => handleDeleteInterface(iface.name)}
-              class="btn-icon btn-icon-small"
-              title="Delete Interface"
-            >
-              <Trash2 class="icon" style="color: var(--danger);" />
-            </button>
-          </div>
-        </div>
-
-        <div class="interface-stats">
-          <div>
-            <div class="stat-label" style="color: var(--text-muted);">
-              Public Key
-            </div>
-            <div
-              class="stat-value-mono"
-              style="color: var(--text-secondary);"
-              title={iface.publicKey}
-            >
-              {#if iface.publicKey}
-                {iface.publicKey?.slice(0, 20)}...
+        {#if iface.listenPort > 0}
+          <!-- Server interface card -->
+          <div class="interface-header">
+            <div class="interface-title-row">
+              <h2 class="interface-name" style="color: var(--text-primary);">
+                {iface.name}
+              </h2>
+              {#if !iface.online}
+                <span
+                  class="interface-port"
+                  style="background-color: rgba(220,38,38,0.1); color: var(--danger);"
+                >
+                  Offline
+                </span>
               {:else}
-                (not running)
+                <span
+                  class="interface-port"
+                  style="background-color: var(--bg-tertiary); color: var(--text-muted);"
+                >
+                  Port {iface.listenPort}
+                </span>
               {/if}
             </div>
+            <div class="interface-actions">
+              {#if !iface.online}
+                <button
+                  onclick={() => handleBringUp(iface.name)}
+                  class="btn btn-primary btn-small"
+                >
+                  <Power class="icon-sm" />
+                  Bring Up
+                </button>
+              {:else}
+                <button
+                  onclick={() => onAddPeer(iface.name, false)}
+                  class="btn btn-primary btn-small"
+                >
+                  <Plus class="icon-sm" />
+                  Add Peer
+                </button>
+              {/if}
+              <button
+                onclick={() => handleViewConfig(iface.name)}
+                class="btn-icon btn-icon-small"
+                title="View Config"
+              >
+                <FileText class="icon" style="color: var(--text-secondary);" />
+              </button>
+              {#if iface.online}
+                <button
+                  onclick={() => handleSyncConfig(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Sync Config"
+                >
+                  <Sync class="icon" style="color: var(--text-secondary);" />
+                </button>
+              {/if}
+              <button
+                onclick={() => handleDeleteInterface(iface.name)}
+                class="btn-icon btn-icon-small"
+                title="Delete Interface"
+              >
+                <Trash2 class="icon" style="color: var(--danger);" />
+              </button>
+            </div>
           </div>
-          {#if iface.online}
-            <div>
-              <div class="stat-label" style="color: var(--text-muted);">RX</div>
-              <div class="stat-value" style="color: var(--text-secondary);">
-                {formatBytes(iface.rxBytes)}
-              </div>
-            </div>
-            <div>
-              <div class="stat-label" style="color: var(--text-muted);">TX</div>
-              <div class="stat-value" style="color: var(--text-secondary);">
-                {formatBytes(iface.txBytes)}
-              </div>
-            </div>
-          {/if}
-        </div>
 
-        {#if !iface.online}
+          <div class="interface-stats">
+            <div>
+              <div class="stat-label" style="color: var(--text-muted);">
+                Public Key
+              </div>
+              <div
+                class="stat-value-mono"
+                style="color: var(--text-secondary);"
+                title={iface.publicKey}
+              >
+                {#if iface.publicKey}
+                  {iface.publicKey?.slice(0, 20)}...
+                {:else}
+                  (not running)
+                {/if}
+              </div>
+            </div>
+            {#if iface.online}
+              <div>
+                <div class="stat-label" style="color: var(--text-muted);">
+                  RX
+                </div>
+                <div class="stat-value" style="color: var(--text-secondary);">
+                  {formatBytes(iface.rxBytes)}
+                </div>
+              </div>
+              <div>
+                <div class="stat-label" style="color: var(--text-muted);">
+                  TX
+                </div>
+                <div class="stat-value" style="color: var(--text-secondary);">
+                  {formatBytes(iface.txBytes)}
+                </div>
+              </div>
+            {/if}
+          </div>
+
+          {#if !iface.online}
+            {#if iface.peers && iface.peers.length > 0}
+              <div class="server-peer-block">
+                {#each iface.peers as peer (peer.publicKey)}
+                  <div class="server-peer-row">
+                    <div class="server-peer-info">
+                      <div
+                        class="server-peer-name"
+                        style="color: var(--text-primary);"
+                      >
+                        {peer.name || peer.publicKey?.slice(0, 20) + "..."}
+                      </div>
+                      <div
+                        class="server-peer-detail"
+                        style="color: var(--text-muted);"
+                      >
+                        {peer.endpoint || "No endpoint"}
+                      </div>
+                      <div
+                        class="server-peer-detail"
+                        style="color: var(--text-muted);"
+                      >
+                        {(peer.allowedIPs || []).join(", ")}
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="no-server-peer" style="color: var(--text-muted);">
+                No peers configured. Bring up the interface to start using it.
+              </div>
+            {/if}
+          {:else}
+            <PeerTable
+              peers={iface.peers || []}
+              onRemove={(pubKey) => handleRemovePeer(iface.name, pubKey)}
+              onEdit={(peer) => handleEditPeer(iface.name, peer)}
+            />
+          {/if}
+        {:else}
+          <!-- Client interface card -->
+          <div class="interface-header">
+            <div class="interface-title-row">
+              <h2 class="interface-name" style="color: var(--text-primary);">
+                {iface.name}
+              </h2>
+              {#if !iface.online}
+                <span
+                  class="interface-port"
+                  style="background-color: rgba(220,38,38,0.1); color: var(--danger);"
+                >
+                  Offline
+                </span>
+              {:else}
+                <span
+                  class="interface-port"
+                  style="background-color: var(--bg-tertiary); color: var(--text-muted);"
+                >
+                  Client Mode
+                </span>
+              {/if}
+            </div>
+            <div class="interface-actions">
+              {#if !iface.online}
+                <button
+                  onclick={() => handleBringUp(iface.name)}
+                  class="btn btn-primary btn-small"
+                >
+                  <Power class="icon-sm" />
+                  Bring Up
+                </button>
+              {/if}
+              <button
+                onclick={() => handleViewConfig(iface.name)}
+                class="btn-icon btn-icon-small"
+                title="View Config"
+              >
+                <FileText class="icon" style="color: var(--text-secondary);" />
+              </button>
+              {#if iface.online}
+                <button
+                  onclick={() => handleSyncConfig(iface.name)}
+                  class="btn-icon btn-icon-small"
+                  title="Sync Config"
+                >
+                  <Sync class="icon" style="color: var(--text-secondary);" />
+                </button>
+              {/if}
+              <button
+                onclick={() => handleDeleteInterface(iface.name)}
+                class="btn-icon btn-icon-small"
+                title="Delete Interface"
+              >
+                <Trash2 class="icon" style="color: var(--danger);" />
+              </button>
+            </div>
+          </div>
+
+          <div class="interface-stats">
+            <div>
+              <div class="stat-label" style="color: var(--text-muted);">
+                Public Key
+              </div>
+              <div
+                class="stat-value-mono"
+                style="color: var(--text-secondary);"
+                title={iface.publicKey}
+              >
+                {#if iface.publicKey}
+                  {iface.publicKey?.slice(0, 20)}...
+                {:else}
+                  (not running)
+                {/if}
+              </div>
+            </div>
+            {#if iface.online}
+              <div>
+                <div class="stat-label" style="color: var(--text-muted);">
+                  RX
+                </div>
+                <div class="stat-value" style="color: var(--text-secondary);">
+                  {formatBytes(iface.rxBytes)}
+                </div>
+              </div>
+              <div>
+                <div class="stat-label" style="color: var(--text-muted);">
+                  TX
+                </div>
+                <div class="stat-value" style="color: var(--text-secondary);">
+                  {formatBytes(iface.txBytes)}
+                </div>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Server peer block: always shown, even when empty -->
           {#if iface.peers && iface.peers.length > 0}
             <div class="server-peer-block">
               {#each iface.peers as peer (peer.publicKey)}
                 <div class="server-peer-row">
                   <div class="server-peer-info">
-                    <div
-                      class="server-peer-name"
-                      style="color: var(--text-primary);"
-                    >
-                      {peer.name || peer.publicKey?.slice(0, 20) + "..."}
+                    <div class="server-peer-field">
+                      <span
+                        class="server-peer-label"
+                        style="color: var(--text-muted);">Server Address:</span
+                      >
+                      <span style="color: var(--text-primary);"
+                        >{peer.endpoint || "Not configured"}</span
+                      >
                     </div>
-                    <div
-                      class="server-peer-detail"
-                      style="color: var(--text-muted);"
-                    >
-                      {peer.endpoint || "No endpoint"}
+                    <div class="server-peer-field">
+                      <span
+                        class="server-peer-label"
+                        style="color: var(--text-muted);">Allowed IPs:</span
+                      >
+                      <span style="color: var(--text-primary);"
+                        >{(peer.allowedIPs || []).join(", ") || "None"}</span
+                      >
                     </div>
-                    <div
-                      class="server-peer-detail"
-                      style="color: var(--text-muted);"
-                    >
-                      {(peer.allowedIPs || []).join(", ")}
+                    {#if peer.name}
+                      <div class="server-peer-field">
+                        <span
+                          class="server-peer-label"
+                          style="color: var(--text-muted);">Name:</span
+                        >
+                        <span style="color: var(--text-primary);"
+                          >{peer.name}</span
+                        >
+                      </div>
+                    {/if}
+                    <div class="server-peer-field">
+                      <span
+                        class="server-peer-label"
+                        style="color: var(--text-muted);">Public Key:</span
+                      >
+                      <span
+                        class="stat-value-mono"
+                        style="color: var(--text-secondary);"
+                        >{peer.publicKey?.slice(0, 20)}...</span
+                      >
                     </div>
+                  </div>
+                  <div class="server-peer-actions">
+                    <button
+                      onclick={() => handleEditPeer(iface.name, peer, true)}
+                      class="btn-icon btn-icon-small"
+                      title="Edit"
+                    >
+                      <Pencil
+                        class="icon"
+                        style="color: var(--text-secondary);"
+                      />
+                    </button>
+                    <button
+                      onclick={() =>
+                        handleRemovePeer(iface.name, peer.publicKey)}
+                      class="btn-icon btn-icon-small"
+                      title="Remove"
+                    >
+                      <Trash2 class="icon" style="color: var(--danger);" />
+                    </button>
                   </div>
                 </div>
               {/each}
             </div>
           {:else}
-            <div class="no-server-peer" style="color: var(--text-muted);">
-              No peers configured. Bring up the interface to start using it.
-            </div>
-          {/if}
-        {:else if iface.listenPort > 0}
-          <PeerTable
-            peers={iface.peers || []}
-            onRemove={(pubKey) => handleRemovePeer(iface.name, pubKey)}
-            onEdit={(peer) => handleEditPeer(iface.name, peer)}
-          />
-        {:else if iface.peers && iface.peers.length > 0}
-          <div class="server-peer-block">
-            {#each iface.peers as peer (peer.publicKey)}
+            <div class="server-peer-block">
               <div class="server-peer-row">
                 <div class="server-peer-info">
-                  <div
-                    class="server-peer-name"
-                    style="color: var(--text-primary);"
-                  >
-                    {peer.name || peer.publicKey?.slice(0, 20) + "..."}
-                  </div>
-                  <div
-                    class="server-peer-detail"
-                    style="color: var(--text-muted);"
-                  >
-                    {peer.endpoint || "No endpoint"}
-                  </div>
-                  <div
-                    class="server-peer-detail"
-                    style="color: var(--text-muted);"
-                  >
-                    {(peer.allowedIPs || []).join(", ")}
+                  <div class="no-server-peer" style="color: var(--text-muted);">
+                    No server peer configured.
                   </div>
                 </div>
                 <div class="server-peer-actions">
                   <button
-                    onclick={() => handleEditPeer(iface.name, peer)}
+                    onclick={() =>
+                      handleEditPeer(
+                        iface.name,
+                        { publicKey: "", endpoint: "", allowedIPs: [] },
+                        true,
+                      )}
                     class="btn-icon btn-icon-small"
-                    title="Edit"
+                    title="Configure"
                   >
                     <Pencil
                       class="icon"
                       style="color: var(--text-secondary);"
                     />
                   </button>
-                  <button
-                    onclick={() => handleRemovePeer(iface.name, peer.publicKey)}
-                    class="btn-icon btn-icon-small"
-                    title="Remove"
-                  >
-                    <Trash2 class="icon" style="color: var(--danger);" />
-                  </button>
                 </div>
               </div>
-            {/each}
-          </div>
-        {:else}
-          <div class="no-server-peer" style="color: var(--text-muted);">
-            No server peer configured. Click "Add Server Peer" to connect to a
-            remote server.
-          </div>
+            </div>
+          {/if}
         {/if}
       </div>
     {/each}
@@ -565,9 +702,11 @@
     {serverId}
     interfaceName={editingPeerIface}
     peer={editingPeer}
+    isClientInterface={editingPeerIsClient}
     onClose={() => {
       editingPeer = null;
       editingPeerIface = "";
+      editingPeerIsClient = false;
     }}
     onSaved={loadStatus}
   />
@@ -761,6 +900,18 @@
 
   .server-peer-detail {
     font-size: 12px;
+  }
+
+  .server-peer-field {
+    font-size: 13px;
+    display: flex;
+    gap: 6px;
+  }
+
+  .server-peer-label {
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 120px;
   }
 
   .server-peer-actions {

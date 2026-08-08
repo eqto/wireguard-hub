@@ -175,52 +175,69 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 		return models.WGStatus{}, err
 	}
 
-	stdout, stderr, err := client.Exec("sudo wg show all dump")
-	if err != nil {
-		// Check if wg binary exists on the server
-		_, _, wgErr := client.Exec("command -v wg")
-		if wgErr != nil {
-			status := models.WGStatus{
-				Interfaces:     []models.WGInterface{},
-				WGNotInstalled: true,
-			}
-			s.fillServerInfo(serverID, client, &status)
-			return status, nil
+	// Check if wg binary exists on the server.
+	_, _, wgErr := client.Exec("command -v wg")
+	if wgErr != nil {
+		status := models.WGStatus{
+			Interfaces:     []models.WGInterface{},
+			WGNotInstalled: true,
 		}
-		_ = stderr
-		// wg is installed but no interfaces are running; scan for config-only interfaces.
-		status := models.WGStatus{Interfaces: []models.WGInterface{}}
-		status.Interfaces = scanOfflineInterfaces(client, nil)
 		s.fillServerInfo(serverID, client, &status)
 		return status, nil
 	}
 
-	status := parseWGDump(stdout)
-
-	// Mark all running interfaces as online.
-	runningNames := make(map[string]bool)
-	for i := range status.Interfaces {
-		status.Interfaces[i].Online = true
-		runningNames[status.Interfaces[i].Name] = true
+	// 1. Get running interface names and live stats from wg show all dump.
+	runningStats := map[string]models.WGInterface{}
+	stdout, _, _ := client.Exec("sudo wg show all dump")
+	if strings.TrimSpace(stdout) != "" {
+		liveStatus := parseWGDump(stdout)
+		for _, iface := range liveStatus.Interfaces {
+			runningStats[iface.Name] = iface
+		}
 	}
 
-	// Merge peer metadata from config files on the server.
-	for i := range status.Interfaces {
-		confStdout, _, confErr := client.Exec(fmt.Sprintf("sudo cat /etc/wireguard/%s.conf", status.Interfaces[i].Name))
+	// 2. List all .conf files and parse each one.
+	status := models.WGStatus{Interfaces: []models.WGInterface{}}
+	confListOut, _, _ := client.Exec("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
+	for _, confPath := range strings.Split(strings.TrimSpace(confListOut), "\n") {
+		confPath = strings.TrimSpace(confPath)
+		if confPath == "" {
+			continue
+		}
+		base := filepath.Base(confPath)
+		ifaceName := strings.TrimSuffix(base, ".conf")
+
+		confText, _, confErr := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
 		if confErr != nil {
 			continue
 		}
-		metaMap := parsePeerMeta(confStdout)
-		for j := range status.Interfaces[i].Peers {
-			if meta, ok := metaMap[status.Interfaces[i].Peers[j].PublicKey]; ok {
-				status.Interfaces[i].Peers[j].Name = meta.Name
-				status.Interfaces[i].Peers[j].Description = meta.Description
+
+		iface := parseInterfaceConfig(confText, ifaceName)
+
+		// 3. Determine online from wg dump.
+		if live, ok := runningStats[ifaceName]; ok {
+			iface.Online = true
+			iface.PublicKey = live.PublicKey
+			iface.RxBytes = live.RxBytes
+			iface.TxBytes = live.TxBytes
+			// Merge live peer stats (handshake, rx/tx) with config peer data.
+			for j := range iface.Peers {
+				for k := range live.Peers {
+					if iface.Peers[j].PublicKey == live.Peers[k].PublicKey {
+						iface.Peers[j].RxBytes = live.Peers[k].RxBytes
+						iface.Peers[j].TxBytes = live.Peers[k].TxBytes
+						iface.Peers[j].LatestHandshake = live.Peers[k].LatestHandshake
+						if live.Peers[k].Endpoint != "" {
+							iface.Peers[j].Endpoint = live.Peers[k].Endpoint
+						}
+						break
+					}
+				}
 			}
 		}
-	}
 
-	// Find offline interfaces: config files in /etc/wireguard/ not in the running list.
-	status.Interfaces = append(status.Interfaces, scanOfflineInterfaces(client, runningNames)...)
+		status.Interfaces = append(status.Interfaces, iface)
+	}
 
 	s.fillServerInfo(serverID, client, &status)
 
@@ -320,6 +337,9 @@ func parseWGDump(output string) models.WGStatus {
 				Endpoint:     fields[3],
 				AllowedIPs:   []string{},
 			}
+			if peer.Endpoint == "(none)" {
+				peer.Endpoint = ""
+			}
 
 			allowedIPs := strings.Split(fields[4], ",")
 			for _, ip := range allowedIPs {
@@ -351,82 +371,6 @@ func parseWGDump(output string) models.WGStatus {
 	}
 
 	return status
-}
-
-// parsePeerMeta parses a WireGuard config file and extracts # Name and # Description
-// comments from each [Peer] section, keyed by the peer's public key.
-func parsePeerMeta(configText string) map[string]models.WGPeer {
-	result := make(map[string]models.WGPeer)
-	lines := strings.Split(configText, "\n")
-
-	var currentPubKey string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "[Peer]" {
-			currentPubKey = ""
-			continue
-		}
-
-		if currentPubKey != "" || strings.HasPrefix(trimmed, "PublicKey") || strings.HasPrefix(trimmed, "# Name") || strings.HasPrefix(trimmed, "# Description") {
-			// Check for PublicKey to associate metadata
-			if strings.HasPrefix(trimmed, "PublicKey") {
-				parts := strings.SplitN(trimmed, "=", 2)
-				if len(parts) == 2 {
-					currentPubKey = strings.TrimSpace(parts[1])
-					if _, ok := result[currentPubKey]; !ok {
-						result[currentPubKey] = models.WGPeer{PublicKey: currentPubKey}
-					}
-				}
-				continue
-			}
-
-			if strings.HasPrefix(trimmed, "# Name") {
-				parts := strings.SplitN(trimmed, "=", 2)
-				if len(parts) == 2 && currentPubKey != "" {
-					p := result[currentPubKey]
-					p.Name = strings.TrimSpace(parts[1])
-					result[currentPubKey] = p
-				}
-				continue
-			}
-
-			if strings.HasPrefix(trimmed, "# Description") {
-				parts := strings.SplitN(trimmed, "=", 2)
-				if len(parts) == 2 && currentPubKey != "" {
-					p := result[currentPubKey]
-					p.Description = strings.TrimSpace(parts[1])
-					result[currentPubKey] = p
-				}
-				continue
-			}
-		}
-	}
-
-	return result
-}
-
-func scanOfflineInterfaces(client ssh.Executor, runningNames map[string]bool) []models.WGInterface {
-	var offline []models.WGInterface
-	confListOut, _, _ := client.Exec("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
-	for _, confPath := range strings.Split(strings.TrimSpace(confListOut), "\n") {
-		confPath = strings.TrimSpace(confPath)
-		if confPath == "" {
-			continue
-		}
-		base := filepath.Base(confPath)
-		ifaceName := strings.TrimSuffix(base, ".conf")
-		if runningNames != nil && runningNames[ifaceName] {
-			continue
-		}
-		confText, _, confErr := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
-		if confErr != nil {
-			continue
-		}
-		offlineIface := parseInterfaceConfig(confText, ifaceName)
-		offline = append(offline, offlineIface)
-	}
-	return offline
 }
 
 func configHasListenPort(configText string) bool {
@@ -827,6 +771,24 @@ func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error)
 		return false, err
 	}
 
+	// If not restarting, apply endpoint/allowedIPs changes via wg set on the live interface.
+	if !req.Restart && (req.Endpoint != "" || len(req.AllowedIPs) > 0) {
+		cmdParts := []string{
+			fmt.Sprintf("sudo wg set %s peer %s", req.Interface, req.PublicKey),
+		}
+		if len(req.AllowedIPs) > 0 {
+			cmdParts = append(cmdParts, fmt.Sprintf("allowed-ips %s", strings.Join(req.AllowedIPs, ",")))
+		}
+		if req.Endpoint != "" {
+			cmdParts = append(cmdParts, fmt.Sprintf("endpoint %s", req.Endpoint))
+		}
+		cmd := strings.Join(cmdParts, " ")
+		_, stderr, err := client.Exec(cmd)
+		if err != nil {
+			return false, fmt.Errorf("failed to update peer: %s: %w", stderr, err)
+		}
+	}
+
 	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Interface)
 	existingConf, stderr, err := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
 	if err != nil {
@@ -838,9 +800,29 @@ func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error)
 		return false, fmt.Errorf("peer not found in config: %s", req.PublicKey)
 	}
 
+	// Also update Endpoint and AllowedIPs in the config file if provided.
+	if req.Endpoint != "" {
+		updatedConf = updatePeerFieldInConfig(updatedConf, req.PublicKey, "Endpoint", req.Endpoint)
+	}
+	if len(req.AllowedIPs) > 0 {
+		updatedConf = updatePeerFieldInConfig(updatedConf, req.PublicKey, "AllowedIPs", strings.Join(req.AllowedIPs, ","))
+	}
+
 	_, stderr, err = client.ExecWithInput(fmt.Sprintf("sudo tee %s > /dev/null", confPath), updatedConf)
 	if err != nil {
 		return false, fmt.Errorf("failed to write config: %s: %w", stderr, err)
+	}
+
+	// If restart requested, bring interface down and back up to apply changes.
+	if req.Restart {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s", req.Interface))
+		if err != nil {
+			return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
+		}
+		_, stderr, err = client.Exec(fmt.Sprintf("sudo wg-quick up %s", req.Interface))
+		if err != nil {
+			return false, fmt.Errorf("failed to bring up interface: %s: %w", stderr, err)
+		}
 	}
 
 	return true, nil
@@ -891,6 +873,45 @@ func removePeerSection(configText string, publicKey string) string {
 	}
 
 	return strings.Join(result, "\n")
+}
+
+// updatePeerFieldInConfig updates a field (e.g. Endpoint, AllowedIPs) in the [Peer] section
+// matching the given public key. Returns the original text if peer not found.
+func updatePeerFieldInConfig(configText string, publicKey string, field string, value string) string {
+	lines := strings.Split(configText, "\n")
+	inPeerSection := false
+	foundPeer := false
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "[Peer]" {
+			inPeerSection = true
+			foundPeer = false
+			continue
+		}
+
+		if trimmed == "[Interface]" {
+			inPeerSection = false
+			continue
+		}
+
+		if inPeerSection && strings.HasPrefix(trimmed, "PublicKey") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
+				foundPeer = true
+			}
+			continue
+		}
+
+		if inPeerSection && foundPeer && strings.HasPrefix(trimmed, field) {
+			lines[i] = fmt.Sprintf("%s = %s", field, value)
+			return strings.Join(lines, "\n")
+		}
+	}
+
+	// Field not found in peer section; nothing to update.
+	return configText
 }
 
 // updatePeerMetaInConfig adds or updates # Name and # Description comments in the

@@ -89,11 +89,14 @@ type KeyPair struct {
 }
 
 type UpdatePeerMetaRequest struct {
-	ServerID    string `yaml:"serverId" json:"serverId"`
-	Interface   string `yaml:"interface" json:"interface"`
-	PublicKey   string `yaml:"publicKey" json:"publicKey"`
-	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
-	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	ServerID    string   `yaml:"serverId" json:"serverId"`
+	Interface   string   `yaml:"interface" json:"interface"`
+	PublicKey   string   `yaml:"publicKey" json:"publicKey"`
+	Name        string   `yaml:"name,omitempty" json:"name,omitempty"`
+	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Endpoint    string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	AllowedIPs  []string `yaml:"allowedIPs,omitempty" json:"allowedIPs,omitempty"`
+	Restart     bool     `yaml:"restart,omitempty" json:"restart,omitempty"`
 }
 
 type TestConnectionResult struct {

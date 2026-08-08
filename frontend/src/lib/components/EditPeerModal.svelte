@@ -8,30 +8,45 @@
     serverId,
     interfaceName,
     peer,
+    isClientInterface = false,
     onClose,
     onSaved,
   }: {
     serverId: string;
     interfaceName: string;
     peer: any;
+    isClientInterface?: boolean;
     onClose: () => void;
     onSaved: () => void;
   } = $props();
 
   let name = $state(peer?.name || "");
   let description = $state(peer?.description || "");
+  let endpoint = $state(peer?.endpoint || "");
+  let allowedIPs = $state((peer?.allowedIPs || []).join(", "));
+  let publicKey = $state(peer?.publicKey || "");
   let saving = $state(false);
 
   async function handleSave() {
     saving = true;
     try {
-      const req = {
+      const req: any = {
         serverId: serverId,
         interface: interfaceName,
         publicKey: peer.publicKey,
         name: name,
         description: description,
       };
+      if (isClientInterface) {
+        if (endpoint) req.endpoint = endpoint;
+        if (allowedIPs.trim()) {
+          req.allowedIPs = allowedIPs
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s);
+        }
+        req.restart = true;
+      }
       const res = await WireguardService.UpdatePeerMeta(req);
       unwrapResponse(res);
       onSaved();
@@ -58,7 +73,9 @@
     tabindex="0"
   >
     <div class="modal-header">
-      <h2 class="modal-title">Edit Peer</h2>
+      <h2 class="modal-title">
+        {isClientInterface ? "Edit Server Peer" : "Edit Peer"}
+      </h2>
       <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
       </button>
@@ -67,8 +84,32 @@
     <div class="modal-body">
       <div class="peer-key-info" style="color: var(--text-muted);">
         <span class="peer-key-label">Public Key:</span>
-        <span class="peer-key-value">{peer.publicKey.slice(0, 20)}...</span>
+        <span class="peer-key-value"
+          >{publicKey?.slice(0, 20) || "(none)"}{publicKey ? "..." : ""}</span
+        >
       </div>
+
+      {#if isClientInterface}
+        <div class="form-group">
+          <label class="label">Server Address</label>
+          <input
+            bind:value={endpoint}
+            type="text"
+            placeholder="vpn.example.com:51820"
+            class="input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="label">Allowed IPs</label>
+          <input
+            bind:value={allowedIPs}
+            type="text"
+            placeholder="0.0.0.0/0, ::/0"
+            class="input"
+          />
+        </div>
+      {/if}
 
       <div class="form-group">
         <label class="label">Name</label>
@@ -99,11 +140,7 @@
       >
         Cancel
       </button>
-      <button
-        onclick={handleSave}
-        disabled={saving}
-        class="btn btn-primary"
-      >
+      <button onclick={handleSave} disabled={saving} class="btn btn-primary">
         {#if saving}
           <Loader2 class="icon spin" />
         {/if}
