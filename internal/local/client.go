@@ -40,7 +40,41 @@ func (c *Client) Exec(cmd string) (string, string, error) {
 
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
 	c.emit(ssh.ExecEvent{Kind: "command", Command: cmd})
+	stdout, stderr, err := c.execInternal(cmd, input)
+	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
+		if line != "" {
+			c.emit(ssh.ExecEvent{Kind: "output", Line: line})
+		}
+	}
+	if stderr != "" {
+		for _, line := range strings.Split(strings.TrimRight(stderr, "\n"), "\n") {
+			if line != "" {
+				c.emit(ssh.ExecEvent{Kind: "output", Line: line})
+			}
+		}
+	}
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	c.emit(ssh.ExecEvent{Kind: "done", Error: errMsg})
+	return stdout, stderr, err
+}
 
+// ExecSilent runs a command without emitting terminal events.
+func (c *Client) ExecSilent(cmd string) (string, string, error) {
+	return c.ExecWithInputSilent(cmd, "")
+}
+
+// ExecWithInputSilent runs a command with stdin input without emitting
+// terminal events. Use for commands that handle sensitive data.
+func (c *Client) ExecWithInputSilent(cmd string, input string) (string, string, error) {
+	return c.execInternal(cmd, input)
+}
+
+// execInternal runs a command locally and returns stdout/stderr/error
+// without emitting any terminal events.
+func (c *Client) execInternal(cmd string, input string) (string, string, error) {
 	finalCmd := cmd
 	finalInput := input
 	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
@@ -62,26 +96,6 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 	}
 
 	err := ec.Run()
-
-	for _, line := range strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n") {
-		if line != "" {
-			c.emit(ssh.ExecEvent{Kind: "output", Line: line})
-		}
-	}
-	if stderr.Len() > 0 {
-		for _, line := range strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n") {
-			if line != "" {
-				c.emit(ssh.ExecEvent{Kind: "output", Line: line})
-			}
-		}
-	}
-
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
-	}
-	c.emit(ssh.ExecEvent{Kind: "done", Error: errMsg})
-
 	return stdout.String(), stderr.String(), err
 }
 

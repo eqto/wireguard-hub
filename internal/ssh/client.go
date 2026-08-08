@@ -111,14 +111,33 @@ func (c *Client) Exec(cmd string) (string, string, error) {
 
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
 	c.emit(ExecEvent{Kind: "command", Command: cmd})
+	stdout, stderr, err := c.execInternal(cmd, input)
+	c.emitOutput(stdout, stderr)
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	c.emit(ExecEvent{Kind: "done", Error: errMsg})
+	return stdout, stderr, err
+}
 
+// ExecSilent runs a command without emitting terminal events.
+func (c *Client) ExecSilent(cmd string) (string, string, error) {
+	return c.ExecWithInputSilent(cmd, "")
+}
+
+// ExecWithInputSilent runs a command with stdin input without emitting
+// terminal events. Use for commands that handle sensitive data.
+func (c *Client) ExecWithInputSilent(cmd string, input string) (string, string, error) {
+	return c.execInternal(cmd, input)
+}
+
+// execInternal runs a command and returns its stdout/stderr/error without
+// emitting any terminal events. The emitting wrappers (ExecWithInput) call
+// this and add emit calls around it.
+func (c *Client) execInternal(cmd string, input string) (string, string, error) {
 	session, err := c.client.NewSession()
 	if err != nil {
-		errMsg := ""
-		if err != nil {
-			errMsg = err.Error()
-		}
-		c.emit(ExecEvent{Kind: "done", Error: errMsg})
 		return "", "", fmt.Errorf("failed to create session: %w", err)
 	}
 	defer session.Close()
@@ -142,28 +161,23 @@ func (c *Client) ExecWithInput(cmd string, input string) (string, string, error)
 	}
 
 	err = session.Run(finalCmd)
+	return stdout.String(), stderr.String(), err
+}
 
-	// Emit output lines from stdout and stderr.
-	for _, line := range strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n") {
+// emitOutput emits stdout/stderr lines as "output" events to the terminal.
+func (c *Client) emitOutput(stdout, stderr string) {
+	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
 		if line != "" {
 			c.emit(ExecEvent{Kind: "output", Line: line})
 		}
 	}
-	if stderr.Len() > 0 {
-		for _, line := range strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n") {
+	if stderr != "" {
+		for _, line := range strings.Split(strings.TrimRight(stderr, "\n"), "\n") {
 			if line != "" {
 				c.emit(ExecEvent{Kind: "output", Line: line})
 			}
 		}
 	}
-
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
-	}
-	c.emit(ExecEvent{Kind: "done", Error: errMsg})
-
-	return stdout.String(), stderr.String(), err
 }
 
 // ExecStreaming runs a command and calls onLine for each line of stdout/stderr.
