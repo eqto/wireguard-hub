@@ -29,6 +29,7 @@
   let showConfigViewer = $state(false);
   let configData = $state({ name: "", content: "" });
   let peerInterface = $state("");
+  let peerIsClient = $state(false);
   let showLocalSetup = $state(false);
 
   onMount(async () => {
@@ -130,8 +131,9 @@
     showAddServer = true;
   }
 
-  function handleAddPeer(iface: string) {
+  function handleAddPeer(iface: string, isClient: boolean = false) {
     peerInterface = iface;
+    peerIsClient = isClient;
     showAddPeer = true;
   }
 
@@ -252,6 +254,7 @@
   <AddPeerModal
     serverId={selected}
     interfaceName={peerInterface}
+    isClientInterface={peerIsClient}
     onClose={() => (showAddPeer = false)}
     onAdded={() => refreshTrigger++}
   />

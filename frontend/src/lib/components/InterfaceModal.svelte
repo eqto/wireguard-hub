@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Loader2, Sparkles } from "@lucide/svelte";
+  import { onMount } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
   import { unwrapResponse } from "../utils";
@@ -15,12 +16,17 @@
   } = $props();
 
   let name = $state("wg0");
+  let mode = $state<"server" | "client">("server");
   let listenPort = $state(51820);
   let privateKey = $state("");
   let address = $state("10.0.0.1/24");
   let endpoint = $state("");
   let generating = $state(false);
   let creating = $state(false);
+
+  onMount(() => {
+    handleGenerate();
+  });
 
   async function handleGenerate() {
     generating = true;
@@ -41,7 +47,7 @@
       const req = {
         serverId: serverId,
         name: name,
-        listenPort: Number(listenPort),
+        listenPort: mode === "server" ? Number(listenPort) : 0,
         privateKey: privateKey,
         address: address,
         endpoint: endpoint,
@@ -78,6 +84,40 @@
     </div>
 
     <div class="modal-body">
+      <div class="form-group">
+        <label class="label">Mode</label>
+        <div class="mode-toggle">
+          <button
+            type="button"
+            onclick={() => (mode = "server")}
+            class="mode-btn"
+            class:active={mode === "server"}
+          >
+            Server
+          </button>
+          <button
+            type="button"
+            onclick={() => (mode = "client")}
+            class="mode-btn"
+            class:active={mode === "client"}
+          >
+            Client
+          </button>
+        </div>
+      </div>
+
+      {#if mode === "client"}
+        <div class="form-group">
+          <label class="label">Server Address</label>
+          <input
+            bind:value={endpoint}
+            type="text"
+            placeholder="vpn.example.com:51820"
+            class="input"
+          />
+        </div>
+      {/if}
+
       <div class="form-row">
         <div class="form-group form-grow">
           <label class="label">Interface Name</label>
@@ -88,15 +128,17 @@
             class="input"
           />
         </div>
-        <div class="form-group form-fixed-128">
-          <label class="label">Listen Port</label>
-          <input
-            bind:value={listenPort}
-            type="number"
-            placeholder="51820"
-            class="input"
-          />
-        </div>
+        {#if mode === "server"}
+          <div class="form-group form-fixed-128">
+            <label class="label">Listen Port</label>
+            <input
+              bind:value={listenPort}
+              type="number"
+              placeholder="51820"
+              class="input"
+            />
+          </div>
+        {/if}
       </div>
 
       <div class="form-group">
@@ -134,16 +176,6 @@
           </button>
         </div>
       </div>
-
-      <div class="form-group">
-        <label class="label">Endpoint (optional)</label>
-        <input
-          bind:value={endpoint}
-          type="text"
-          placeholder="vpn.example.com:51820"
-          class="input"
-        />
-      </div>
     </div>
 
     <div class="modal-footer">
@@ -156,7 +188,10 @@
       </button>
       <button
         onclick={handleCreate}
-        disabled={creating || !name || !listenPort}
+        disabled={creating ||
+          !name ||
+          (mode === "server" && !listenPort) ||
+          (mode === "client" && !endpoint)}
         class="btn btn-primary"
       >
         {#if creating}
@@ -195,5 +230,32 @@
     font-weight: 500;
     background: transparent;
     cursor: pointer;
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
+
+    &.active {
+      background-color: var(--accent);
+      color: white;
+    }
   }
 </style>

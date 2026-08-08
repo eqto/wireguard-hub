@@ -32,7 +32,7 @@
   }: {
     serverId: string;
     onRefresh: () => void;
-    onAddPeer: (iface: string) => void;
+    onAddPeer: (iface: string, isClient: boolean) => void;
     onCreateInterface: () => void;
     onViewConfig: (name: string, content: string) => void;
     onEditServer: (server: any) => void;
@@ -346,21 +346,40 @@
             <h2 class="interface-name" style="color: var(--text-primary);">
               {iface.name}
             </h2>
-            <span
-              class="interface-port"
-              style="background-color: var(--bg-tertiary); color: var(--text-muted);"
-            >
-              Port {iface.listenPort}
-            </span>
+            {#if iface.listenPort > 0}
+              <span
+                class="interface-port"
+                style="background-color: var(--bg-tertiary); color: var(--text-muted);"
+              >
+                Port {iface.listenPort}
+              </span>
+            {:else}
+              <span
+                class="interface-port"
+                style="background-color: var(--bg-tertiary); color: var(--text-muted);"
+              >
+                Client Mode
+              </span>
+            {/if}
           </div>
           <div class="interface-actions">
-            <button
-              onclick={() => onAddPeer(iface.name)}
-              class="btn btn-primary btn-small"
-            >
-              <Plus class="icon-sm" />
-              Add Peer
-            </button>
+            {#if iface.listenPort > 0}
+              <button
+                onclick={() => onAddPeer(iface.name, false)}
+                class="btn btn-primary btn-small"
+              >
+                <Plus class="icon-sm" />
+                Add Peer
+              </button>
+            {:else if !iface.peers || iface.peers.length === 0}
+              <button
+                onclick={() => onAddPeer(iface.name, true)}
+                class="btn btn-primary btn-small"
+              >
+                <Plus class="icon-sm" />
+                Add Server Peer
+              </button>
+            {/if}
             <button
               onclick={() => handleViewConfig(iface.name)}
               class="btn-icon btn-icon-small"
@@ -412,11 +431,64 @@
           </div>
         </div>
 
-        <PeerTable
-          peers={iface.peers || []}
-          onRemove={(pubKey) => handleRemovePeer(iface.name, pubKey)}
-          onEdit={(peer) => handleEditPeer(iface.name, peer)}
-        />
+        {#if iface.listenPort > 0}
+          <PeerTable
+            peers={iface.peers || []}
+            onRemove={(pubKey) => handleRemovePeer(iface.name, pubKey)}
+            onEdit={(peer) => handleEditPeer(iface.name, peer)}
+          />
+        {:else if iface.peers && iface.peers.length > 0}
+          <div class="server-peer-block">
+            {#each iface.peers as peer (peer.publicKey)}
+              <div class="server-peer-row">
+                <div class="server-peer-info">
+                  <div
+                    class="server-peer-name"
+                    style="color: var(--text-primary);"
+                  >
+                    {peer.name || peer.publicKey?.slice(0, 20) + "..."}
+                  </div>
+                  <div
+                    class="server-peer-detail"
+                    style="color: var(--text-muted);"
+                  >
+                    {peer.endpoint || "No endpoint"}
+                  </div>
+                  <div
+                    class="server-peer-detail"
+                    style="color: var(--text-muted);"
+                  >
+                    {(peer.allowedIPs || []).join(", ")}
+                  </div>
+                </div>
+                <div class="server-peer-actions">
+                  <button
+                    onclick={() => handleEditPeer(iface.name, peer)}
+                    class="btn-icon btn-icon-small"
+                    title="Edit"
+                  >
+                    <Pencil
+                      class="icon"
+                      style="color: var(--text-secondary);"
+                    />
+                  </button>
+                  <button
+                    onclick={() => handleRemovePeer(iface.name, peer.publicKey)}
+                    class="btn-icon btn-icon-small"
+                    title="Remove"
+                  >
+                    <Trash2 class="icon" style="color: var(--danger);" />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="no-server-peer" style="color: var(--text-muted);">
+            No server peer configured. Click "Add Server Peer" to connect to a
+            remote server.
+          </div>
+        {/if}
       </div>
     {/each}
   {/if}
@@ -594,5 +666,45 @@
   .server-endpoint-line {
     font-size: 13px;
     line-height: 1.3;
+  }
+
+  .server-peer-block {
+    margin-top: 8px;
+  }
+
+  .server-peer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: 8px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border);
+  }
+
+  .server-peer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .server-peer-name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .server-peer-detail {
+    font-size: 12px;
+  }
+
+  .server-peer-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .no-server-peer {
+    font-size: 13px;
+    padding: 16px;
+    text-align: center;
   }
 </style>

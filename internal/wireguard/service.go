@@ -393,6 +393,16 @@ func parsePeerMeta(configText string) map[string]models.WGPeer {
 	return result
 }
 
+func configHasListenPort(configText string) bool {
+	for _, line := range strings.Split(configText, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "ListenPort") {
+			return true
+		}
+	}
+	return false
+}
+
 func parseTimestamp(s string) time.Time {
 	ts, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
@@ -455,7 +465,9 @@ func (s *Service) CreateInterface(req models.CreateInterfaceRequest) (models.WGI
 	conf.WriteString("[Interface]\n")
 	conf.WriteString(fmt.Sprintf("PrivateKey = %s\n", privKey))
 	conf.WriteString(fmt.Sprintf("Address = %s\n", address))
-	conf.WriteString(fmt.Sprintf("ListenPort = %d\n", req.ListenPort))
+	if req.ListenPort > 0 {
+		conf.WriteString(fmt.Sprintf("ListenPort = %d\n", req.ListenPort))
+	}
 	if req.Endpoint != "" {
 		conf.WriteString(fmt.Sprintf("Endpoint = %s\n", req.Endpoint))
 	}
@@ -537,6 +549,21 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 		return models.AddPeerResult{}, err
 	}
 
+	// Check if this is a client interface (no ListenPort in config).
+	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Interface)
+	confText, _, _ := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
+	isClientInterface := !configHasListenPort(confText)
+
+	if isClientInterface {
+		if req.Endpoint == "" {
+			return models.AddPeerResult{}, fmt.Errorf("client interface requires peer endpoint")
+		}
+		peersOut, _, _ := client.Exec(fmt.Sprintf("sudo wg show %s peers", req.Interface))
+		if strings.TrimSpace(peersOut) != "" {
+			return models.AddPeerResult{}, fmt.Errorf("client interface can only have one server peer")
+		}
+	}
+
 	pubKey := req.PublicKey
 	var privKey string
 
@@ -575,7 +602,6 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 	s.SyncConfig(req.ServerID, req.Interface)
 
 	// Append the [Peer] section to the config file for persistence across reboots.
-	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", req.Interface)
 	existingConf, _, _ := client.Exec(fmt.Sprintf("sudo cat %s", confPath))
 
 	var peerSection strings.Builder

@@ -7,11 +7,13 @@
   let {
     serverId,
     interfaceName,
+    isClientInterface = false,
     onClose,
     onAdded,
   }: {
     serverId: string;
     interfaceName: string;
+    isClientInterface?: boolean;
     onClose: () => void;
     onAdded?: () => void;
   } = $props();
@@ -91,7 +93,10 @@
     tabindex="0"
   >
     <div class="modal-header">
-      <h2 class="modal-title">Add Peer to {interfaceName}</h2>
+      <h2 class="modal-title">
+        {isClientInterface ? "Add Server Peer to" : "Add Peer to"}
+        {interfaceName}
+      </h2>
       <button onclick={onClose} class="close-btn">
         <X class="icon-lg" style="color: var(--text-secondary);" />
       </button>
@@ -193,7 +198,9 @@
 
         <div class="form-row">
           <div class="form-group form-grow">
-            <label class="label">Endpoint (optional)</label>
+            <label class="label"
+              >Endpoint {isClientInterface ? "(required)" : "(optional)"}</label
+            >
             <input
               bind:value={endpoint}
               type="text"
@@ -223,7 +230,10 @@
         </button>
         <button
           onclick={handleAdd}
-          disabled={adding || !publicKey || !allowedIPs}
+          disabled={adding ||
+            !publicKey ||
+            !allowedIPs ||
+            (isClientInterface && !endpoint)}
           class="btn btn-primary"
         >
           {#if adding}
