@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Loader2 } from "@lucide/svelte";
+  import { untrack } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
   import { unwrapResponse } from "../utils";
@@ -20,11 +21,11 @@
     onSaved: () => void;
   } = $props();
 
-  let name = $state(peer?.name || "");
-  let description = $state(peer?.description || "");
-  let endpoint = $state(peer?.endpoint || "");
-  let allowedIPs = $state((peer?.allowedIPs || []).join(", "));
-  let publicKey = $state(peer?.publicKey || "");
+  let name = $state(untrack(() => peer?.name || ""));
+  let description = $state(untrack(() => peer?.description || ""));
+  let endpoint = $state(untrack(() => peer?.endpoint || ""));
+  let allowedIPs = $state(untrack(() => (peer?.allowedIPs || []).join(", ")));
+  let publicKey = $state(untrack(() => peer?.publicKey || ""));
   let saving = $state(false);
 
   async function handleSave() {
@@ -45,8 +46,8 @@
         if (allowedIPs.trim()) {
           req.allowedIPs = allowedIPs
             .split(",")
-            .map((s) => s.trim())
-            .filter((s) => s);
+            .map((s: string) => s.trim())
+            .filter((s: string) => s);
         }
         req.restart = true;
       }
@@ -72,6 +73,7 @@
   <div
     class="modal"
     onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
@@ -87,8 +89,9 @@
     <div class="modal-body">
       {#if isClientInterface}
         <div class="form-group">
-          <label class="label">Public Key</label>
+          <label class="label" for="edit-peer-public-key">Public Key</label>
           <input
+            id="edit-peer-public-key"
             bind:value={publicKey}
             type="text"
             placeholder="(none)"
@@ -104,8 +107,9 @@
 
       {#if isClientInterface}
         <div class="form-group">
-          <label class="label">Server Address</label>
+          <label class="label" for="edit-peer-endpoint">Server Address</label>
           <input
+            id="edit-peer-endpoint"
             bind:value={endpoint}
             type="text"
             placeholder="vpn.example.com:51820"
@@ -114,8 +118,9 @@
         </div>
 
         <div class="form-group">
-          <label class="label">Allowed IPs</label>
+          <label class="label" for="edit-peer-allowed-ips">Allowed IPs</label>
           <input
+            id="edit-peer-allowed-ips"
             bind:value={allowedIPs}
             type="text"
             placeholder="0.0.0.0/0, ::/0"
@@ -126,8 +131,9 @@
 
       {#if !isClientInterface}
         <div class="form-group">
-          <label class="label">Name</label>
+          <label class="label" for="edit-peer-name">Name</label>
           <input
+            id="edit-peer-name"
             bind:value={name}
             type="text"
             placeholder="e.g. Alice's laptop"
@@ -136,8 +142,9 @@
         </div>
 
         <div class="form-group">
-          <label class="label">Description</label>
+          <label class="label" for="edit-peer-description">Description</label>
           <input
+            id="edit-peer-description"
             bind:value={description}
             type="text"
             placeholder="e.g. Work laptop for remote access"
