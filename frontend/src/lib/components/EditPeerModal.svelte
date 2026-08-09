@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, LoaderCircle } from "@lucide/svelte";
+  import { X, LoaderCircle, Plus } from "@lucide/svelte";
   import { untrack } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
@@ -24,9 +24,29 @@
   let name = $state(untrack(() => peer?.name || ""));
   let description = $state(untrack(() => peer?.description || ""));
   let endpoint = $state(untrack(() => peer?.endpoint || ""));
-  let allowedIPs = $state(untrack(() => (peer?.allowedIPs || []).join(", ")));
+  let allowedIPs = $state<string[]>(untrack(() => peer?.allowedIPs || []));
   let publicKey = $state(untrack(() => peer?.publicKey || ""));
   let saving = $state(false);
+  let newIP = $state("");
+
+  function addIP() {
+    const ip = newIP.trim();
+    if (ip && !allowedIPs.includes(ip)) {
+      allowedIPs = [...allowedIPs, ip];
+    }
+    newIP = "";
+  }
+
+  function removeIP(ip: string) {
+    allowedIPs = allowedIPs.filter((x) => x !== ip);
+  }
+
+  function handleIPKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addIP();
+    }
+  }
 
   async function handleSave() {
     saving = true;
@@ -43,11 +63,8 @@
           req.newPublicKey = publicKey;
         }
         if (endpoint) req.endpoint = endpoint;
-        if (allowedIPs.trim()) {
-          req.allowedIPs = allowedIPs
-            .split(",")
-            .map((s: string) => s.trim())
-            .filter((s: string) => s);
+        if (allowedIPs.length > 0) {
+          req.allowedIPs = allowedIPs;
         }
         req.restart = true;
       }
@@ -119,13 +136,42 @@
 
         <div class="form-group">
           <label class="label" for="edit-peer-allowed-ips">Allowed IPs</label>
-          <input
-            id="edit-peer-allowed-ips"
-            bind:value={allowedIPs}
-            type="text"
-            placeholder="0.0.0.0/0, ::/0"
-            class="input"
-          />
+          <div class="chips-container">
+            {#each allowedIPs as ip (ip)}
+              <span class="ip-chip">
+                <button
+                  type="button"
+                  class="chip-remove"
+                  onclick={() => removeIP(ip)}
+                  title="Remove"
+                >
+                  <X class="chip-x-icon" />
+                </button>
+                {ip}
+              </span>
+            {/each}
+            <div class="chip-input-wrap">
+              <input
+                id="edit-peer-allowed-ips"
+                bind:value={newIP}
+                onkeydown={handleIPKeydown}
+                type="text"
+                placeholder={allowedIPs.length === 0
+                  ? "0.0.0.0/0, ::/0"
+                  : "Add IP…"}
+                class="input chip-input"
+              />
+              <button
+                type="button"
+                onclick={addIP}
+                disabled={!newIP.trim()}
+                class="chip-add-btn"
+                title="Add"
+              >
+                <Plus class="chip-add-icon" />
+              </button>
+            </div>
+          </div>
         </div>
       {/if}
 
@@ -194,5 +240,112 @@
     font-weight: 500;
     background: transparent;
     cursor: pointer;
+  }
+
+  .chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background-color: var(--bg-secondary);
+    align-items: center;
+  }
+
+  .ip-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 2px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: "Courier New", monospace;
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .chip-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+
+    &:hover {
+      color: var(--danger, #e5484d);
+      background-color: color-mix(
+        in srgb,
+        var(--danger, #e5484d) 15%,
+        transparent
+      );
+    }
+  }
+
+  .chip-x-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .chip-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .chip-input {
+    flex: 1;
+    min-width: 80px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    outline: none;
+
+    &::placeholder {
+      color: var(--text-muted);
+    }
+  }
+
+  .chip-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+
+    &:hover:not(:disabled) {
+      color: var(--accent);
+      background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+
+  .chip-add-icon {
+    width: 16px;
+    height: 16px;
   }
 </style>
