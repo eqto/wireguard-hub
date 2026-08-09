@@ -187,7 +187,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 	}
 
 	// Verify sudo access before running sudo commands.
-	_, sudoStderr, sudoErr := client.Exec("sudo true")
+	_, sudoStderr, sudoErr := client.ExecSilent("sudo true")
 	if sudoErr != nil {
 		msg := strings.TrimSpace(sudoStderr)
 		if strings.Contains(msg, "incorrect password attempt") {
@@ -751,9 +751,7 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 		return models.AddPeerResult{}, fmt.Errorf("failed to update config file: %s: %w", stderr, err)
 	}
 
-	serverIP, _, _ := client.Exec(fmt.Sprintf("sudo wg show %s listen-port | head -1 && hostname -I | awk '{print $1}'", req.Interface))
-
-	clientConfig := generateClientConfig(privKey, pubKey, req, serverIP)
+	clientConfig := generateClientConfig(privKey, pubKey, req)
 
 	return models.AddPeerResult{
 		PublicKey: pubKey,
@@ -761,7 +759,7 @@ func (s *Service) AddPeer(req models.AddPeerRequest) (models.AddPeerResult, erro
 	}, nil
 }
 
-func generateClientConfig(privKey string, pubKey string, req models.AddPeerRequest, serverInfo string) string {
+func generateClientConfig(privKey string, pubKey string, req models.AddPeerRequest) string {
 	var conf strings.Builder
 	conf.WriteString("[Interface]\n")
 	if privKey != "" {
