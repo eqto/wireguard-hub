@@ -109,6 +109,28 @@ func (c *Client) Exec(cmd string) (string, string, error) {
 	return c.ExecWithInput(cmd, "")
 }
 
+// ExecF is a printf-style wrapper around Exec.
+func (c *Client) ExecF(format string, args ...any) (string, string, error) {
+	return c.Exec(fmt.Sprintf(format, args...))
+}
+
+// ExecSilentF is a printf-style wrapper around ExecSilent.
+func (c *Client) ExecSilentF(format string, args ...any) (string, string, error) {
+	return c.ExecSilent(fmt.Sprintf(format, args...))
+}
+
+// ExecWithInputF is a printf-style wrapper around ExecWithInput.
+// input is passed first so the variadic args slice can be last.
+func (c *Client) ExecWithInputF(input, format string, args ...any) (string, string, error) {
+	return c.ExecWithInput(fmt.Sprintf(format, args...), input)
+}
+
+// ExecWithInputSilentF is a printf-style wrapper around ExecWithInputSilent.
+// input is passed first so the variadic args slice can be last.
+func (c *Client) ExecWithInputSilentF(input, format string, args ...any) (string, string, error) {
+	return c.ExecWithInputSilent(fmt.Sprintf(format, args...), input)
+}
+
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
 	c.emit(ExecEvent{Kind: "command", Command: cmd})
 	stdout, stderr, err := c.execInternal(cmd, input)

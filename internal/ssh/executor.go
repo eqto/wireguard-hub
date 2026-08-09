@@ -15,6 +15,18 @@ type Executor interface {
 	// (e.g. WireGuard .conf files containing private keys).
 	ExecSilent(cmd string) (string, string, error)
 	ExecWithInputSilent(cmd string, input string) (string, string, error)
+	// ExecF, ExecSilentF, ExecWithInputF and ExecWithInputSilentF are
+	// printf-style convenience wrappers around their non-format
+	// counterparts. They call fmt.Sprintf(format, args...) and delegate
+	// to Exec / ExecSilent / ExecWithInput / ExecWithInputSilent
+	// respectively.
+	//
+	// For the *WithInput* variants, input is the first argument so the
+	// variadic args slice can be last (required by Go).
+	ExecF(format string, args ...any) (string, string, error)
+	ExecSilentF(format string, args ...any) (string, string, error)
+	ExecWithInputF(input, format string, args ...any) (string, string, error)
+	ExecWithInputSilentF(input, format string, args ...any) (string, string, error)
 	// CommandExists checks whether a binary is available on the server's
 	// PATH. It runs `command -v <name>` silently and returns true if the
 	// command was found.
