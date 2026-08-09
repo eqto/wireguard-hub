@@ -51,9 +51,9 @@ Server passwords and private keys are stored in plaintext YAML (`servers.yaml`).
 defer serverSvc.CloseAll()
 ```
 
-## 7. Implement Distro Strategy Pattern (or Update Docs)
+## 7. ~~Implement Distro Strategy Pattern (or Update Docs)~~ — Resolved
 
-The architecture document (`docs/plan/architecture.md`) describes a `Distro` interface with concrete implementations (`distros/ubuntu.go`, `distros/fedora.go`, etc.), but `internal/wireguard/distros/` doesn't exist. Either implement the strategy pattern or remove it from the architecture doc to match reality.
+The `Distro` interface and `internal/wireguard/distros/` package were removed in favor of runtime detection (`CommandExists` for package managers, `hasSystemd` for init system). The architecture and supported-distros docs have been updated to reflect this. No further action needed.
 
 ## 8. Update `build/config.yml` Metadata
 

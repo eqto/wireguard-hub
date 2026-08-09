@@ -1,128 +1,60 @@
 # Supported Linux Distributions
 
-WireguardHub supports multiple Linux distributions by abstracting distro-specific differences behind a `Distro` interface. This document covers what's supported, how detection works, and how to add new distros.
+WireguardHub does **not** ship per-distro code or configuration. Instead it probes the host at runtime and adapts its commands accordingly. This document describes what is detected, how, and which distributions are covered as a result.
 
-## Supported Distros
+## What Is Detected
 
-| Distro ID | Display Name | Package Manager | Install Command | Init System | Privilege | Config Path |
-|-----------|-------------|----------------|-----------------|-------------|-----------|-------------|
-| `ubuntu` | Ubuntu / Debian | `apt` | `apt install -y wireguard wireguard-tools` | systemd | `sudo` | `/etc/wireguard/<iface>.conf` |
-| `fedora` | Fedora / RHEL | `dnf` | `dnf install -y wireguard-tools` | systemd | `sudo` | `/etc/wireguard/<iface>.conf` |
-| `opensuse` | openSUSE | `zypper` | `zypper install -y wireguard-tools` | systemd | `sudo` | `/etc/wireguard/<iface>.conf` |
-| `alpine` | Alpine | `apk` | `apk add wireguard-tools` | OpenRC | root (no sudo) | `/etc/wireguard/<iface>.conf` |
+| Probe | How | Used For |
+|-------|-----|----------|
+| Package manager | `command -v apt-get` → `dnf` → `yum` → `pacman` (first match) | `InstallWireGuard`, reported in `WGStatus.PackageManager` |
+| Init system | `command -v systemctl` **and** `test -d /run/systemd/system` | Whether `wg-quick@<iface>` service management is available (`WGStatus.HasSystemd`) |
+| OS name | `PRETTY_NAME` from `/etc/os-release` | Display only (`WGStatus.OS`) |
+| Hostname / IP | `hostname`, `hostname -I \| awk '{print $1}'` | Display only |
 
-### Family Coverage
+There is no `distroId` config field, no distro dropdown, and no `/etc/os-release` `ID`/`ID_LIKE` mapping. Detection happens on every `GetStatus` call (server info is cached per server ID afterward).
 
-Each distro implementation covers its broader family:
+## Supported Package Managers
 
-- **`ubuntu`** — Ubuntu, Debian, Linux Mint, Pop!_OS, and other Debian derivatives
-- **`fedora`** — Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux, Amazon Linux
-- **`opensuse`** — openSUSE Leap, openSUSE Tumbleweed, SUSE Linux Enterprise
-- **`alpine`** — Alpine Linux (commonly used in containers and lightweight VPS)
+| Package Manager | Install Command | Example Distros |
+|-----------------|-----------------|-----------------|
+| `apt-get` | `sudo apt-get update && sudo apt-get install -y wireguard wireguard-tools` | Ubuntu, Debian, Linux Mint, Pop!_OS |
+| `dnf` | `sudo dnf install -y wireguard-tools` | Fedora, RHEL, Rocky, AlmaLinux |
+| `yum` | `sudo yum install -y epel-release && sudo yum install -y wireguard-tools` | CentOS, Amazon Linux |
+| `pacman` | `sudo pacman -S --noconfirm wireguard-tools` | Arch Linux |
 
-## Service Management Commands
+The `apt-get` path retries up to 6 times (5s apart) when the dpkg lock is held by another process.
 
-### systemd (Ubuntu, Fedora, openSUSE)
+If none of the above are present, `InstallWireGuard` returns an error: *"no supported package manager found (apt/dnf/yum/pacman)"*.
+
+## Service Management
+
+### systemd (when `HasSystemd` is true)
 
 | Action | Command |
 |--------|---------|
-| Start interface | `sudo systemctl start wg-quick@<iface>` |
+| Start interface | `sudo systemctl start wg-quick@<iface>` (via `systemctl stop; start` to reset oneshot state) |
 | Stop interface | `sudo systemctl stop wg-quick@<iface>` |
-| Enable on boot | `sudo systemctl enable wg-quick@<iface>` |
+| Restart interface | `sudo systemctl stop wg-quick@<iface>; systemctl start wg-quick@<iface>` |
+| Enable on boot | `sudo systemctl enable --now wg-quick@<iface>` |
 | Disable on boot | `sudo systemctl disable wg-quick@<iface>` |
+| Delete interface | `sudo systemctl disable --stop wg-quick@<iface>` |
 
-### OpenRC (Alpine)
+When the `wg-quick@<iface>` service is enabled, start/stop/restart/delete route through `systemctl` so systemd tracks the unit state. When it is not enabled, they fall back to direct `wg-quick up/down`. Enabling a service that is currently up via `wg-quick` performs an atomic transition (`wg-quick down && systemctl enable --now`) inside a single `sudo bash -c` so the sudo password is only requested once.
 
-| Action | Command |
-|--------|---------|
-| Start interface | `rc-service wg-quick.<iface> start` |
-| Stop interface | `rc-service wg-quick.<iface> stop` |
-| Enable on boot | `rc-update add wg-quick.<iface> default` |
-| Disable on boot | `rc-update del wg-quick.<iface> default` |
+### No systemd
 
-Key differences in Alpine:
-- Uses **dot notation** (`wg-quick.<iface>`) instead of systemd's **template units** (`wg-quick@<iface>`)
-- No `sudo` prefix — the SSH user is typically root
-- `rc-service` / `rc-update` instead of `systemctl`
+When `HasSystemd` is false, only direct `wg-quick up/down` is available. Service enable/disable and the "enable as service" option are hidden/disabled in the UI, and `EnableService`/`DisableService` return an error.
 
-## Auto-Detection
+## Adding Support for a New Distro
 
-When a server's `distroId` is not set (empty string), the app auto-detects the distro on first SSH connection:
+In most cases **no code changes are needed** — if the distribution uses `apt`, `dnf`, `yum`, or `pacman` and is booted with systemd, it is already supported.
 
-1. Runs `cat /etc/os-release` over SSH
-2. Parses the `ID=` and `ID_LIKE=` fields
-3. Maps the result to the closest supported distro:
+If the distribution uses a different package manager or init system:
 
-| `ID` / `ID_LIKE` value | Detected Distro |
-|------------------------|----------------|
-| `ubuntu`, `debian`, `linuxmint`, `pop` | `ubuntu` |
-| `fedora`, `rhel`, `centos`, `rocky`, `almalinux`, `amzn` | `fedora` |
-| `opensuse`, `opensuse-leap`, `opensuse-tumbleweed`, `sles` | `opensuse` |
-| `alpine` | `alpine` |
+1. **Package manager** — add a branch to `InstallWireGuard` in `internal/wireguard/service.go` keyed on `client.CommandExists("<pm>")`, and add it to the package-manager detection chain in `fillServerInfo`.
+2. **Init system** — if it is not systemd, the systemd service-management methods will already gracefully fall back to `wg-quick up/down`. A new init system would require new service-control branches in `interface.go` (`BringUpInterface`, `BringDownInterface`, `RestartInterface`, `EnableService`, `DisableService`, `DeleteInterface`).
+3. **Update this document** — add the package manager / init system to the tables above.
 
-4. If no match is found, falls back to a **generic systemd distro** (assumes `sudo` + `systemctl` + `/etc/wireguard/`)
+## Privilege Escalation
 
-The detected distro is cached for the session. To persist it, set `distroId` in the server config or select it from the dropdown in the Add/Edit Server modal.
-
-## Manual Override
-
-You can override auto-detection in two ways:
-
-1. **UI**: In the Add/Edit Server modal, select a distro from the "Linux Distro" dropdown (defaults to "Auto-detect")
-2. **Config file**: Set the `distroId` field in `~/.config/wireguardhub/servers.yaml`:
-
-```yaml
-- id: "abc-123"
-  name: "My Server"
-  host: "10.0.0.1"
-  port: 22
-  username: "root"
-  authMethod: "key"
-  distroId: "alpine"
-```
-
-## Architecture
-
-The distro abstraction uses the **strategy pattern**:
-
-```
-internal/wireguard/
-├── distro.go              # Distro interface
-├── detect.go              # Auto-detection logic
-└── distros/
-    ├── common.go          # systemdDistro + openrcDistro base structs
-    ├── ubuntu.go          # UbuntuDistro (embeds systemdDistro)
-    ├── fedora.go          # FedoraDistro (embeds systemdDistro)
-    ├── opensuse.go        # OpenSusedistro (embeds systemdDistro)
-    └── alpine.go          # AlpineDistro (embeds openrcDistro)
-```
-
-The `Distro` interface defines methods for all distro-specific operations:
-
-- `InstallWireGuard()` — package install command
-- `StartInterface(name)` / `StopInterface(name)` — service control
-- `EnableInterface(name)` / `DisableInterface(name)` — boot persistence
-- `WriteConfig(name, content)` / `ReadConfig(name)` / `RemoveConfig(name)` — config file operations
-- `SyncConfig(name)` — `wg syncconf` command
-
-Two shared base structs reduce duplication:
-- **`systemdDistro`** — shared by Ubuntu, Fedora, openSUSE (systemctl + sudo + `/etc/wireguard/`)
-- **`openrcDistro`** — shared by Alpine (rc-service + no sudo + `/etc/wireguard/`)
-
-Each concrete distro embeds the appropriate base and only overrides `InstallWireGuard()`.
-
-## Adding a New Distro
-
-To support a new distribution:
-
-1. **Create a distro implementation** in `internal/wireguard/distros/<name>.go`:
-   - Embed `systemdDistro` or `openrcDistro` (or implement all methods if it uses a different init system)
-   - Override `ID()`, `DisplayName()`, and `InstallWireGuard()` at minimum
-
-2. **Register the distro** in the distro registry (`internal/wireguard/distro.go`)
-
-3. **Add detection mapping** in `internal/wireguard/detect.go` — map the distro's `ID` / `ID_LIKE` value from `/etc/os-release` to your new implementation
-
-4. **Update the frontend** — add the new distro as an option in the Add/Edit Server modal dropdown
-
-5. **Update this document** — add the distro to the supported distros table
+All privileged commands are run with `sudo`. The SSH/local clients rewrite `sudo <cmd>` into `sudo -S -p '' <cmd>` and pipe the stored password to stdin, so no interactive TTY is required. On the local machine, if the user is already root, sudo is still used but the password may be empty.

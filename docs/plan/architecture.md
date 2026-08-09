@@ -1,16 +1,17 @@
-# WireguardHub — Desktop App Plan
+# WireguardHub — Architecture
 
-A cross-platform desktop app built with Wails 3 (Go + Svelte) to manage multiple WireGuard servers over SSH, supporting full interface lifecycle, peer management, and dark/light themes.
+A cross-platform desktop app built with Wails 3 (Go + Svelte 5) to manage WireGuard on remote servers over SSH or on the local machine directly. Supports full interface lifecycle, peer management, systemd service integration, a live terminal panel, and dark/light themes.
 
 ## Tech Stack
 
 - **Wails 3** — desktop app framework (Go backend + webview frontend)
 - **Svelte 5 + TypeScript + Vite** — frontend
-- **TailwindCSS** — styling
-- **lucide-svelte** — icons
-- **shadcn-svelte** — UI component library
+- **Bun** — frontend package manager / runtime
+- **Custom SCSS + CSS variables** — styling (dark/light theme via CSS custom properties)
+- **@lucide/svelte** — icons
 - **golang.org/x/crypto/ssh** — SSH client in Go
-- **adrg/xdg** (already a dep) — config file paths
+- **adrg/xdg** — cross-platform config file paths
+- **google/uuid** — server profile IDs
 - **gopkg.in/yaml.v3** — YAML encoding/decoding
 
 ## Project Structure
@@ -19,98 +20,175 @@ A cross-platform desktop app built with Wails 3 (Go + Svelte) to manage multiple
 WireguardHub/
 ├── main.go                              # Entry point, register services, window config
 ├── internal/
-│   ├── models/models.go                 # Data structures
-│   ├── ssh/client.go                    # SSH connection manager
-│   ├── server/service.go                # ServerService — CRUD for server profiles
-│   ├── wireguard/service.go             # WireGuardService — full WG management via SSH
-│   └── config/store.go                  # YAML config store (load/save server profiles)
+│   ├── models/models.go                 # Data structures (ServerConfig, WGInterface, WGPeer, …)
+│   ├── config/store.go                  # YAML config store (servers.yaml + local.yaml)
+│   ├── ssh/
+│   │   ├── client.go                    # SSH connection manager (password/key auth, jump host)
+│   │   └── executor.go                  # Executor interface (shared by SSH + local clients)
+│   ├── local/client.go                  # Local os/exec client — implements Executor
+│   ├── server/service.go                # ServerService — CRUD, session pooling, local config
+│   └── wireguard/
+│       ├── service.go                   # Status, install, parsing, server-info caching
+│       ├── interface.go                 # Interface lifecycle + service management
+│       └── peer.go                      # Peer add/remove/update + client config generation
 ├── frontend/
 │   ├── src/
 │   │   ├── main.ts                      # App bootstrap
-│   │   ├── App.svelte                   # Root layout: sidebar + main panel + theme provider
+│   │   ├── App.svelte                   # Root layout: sidebar + main panel + modals + terminal
+│   │   ├── app.scss                     # Global styles (custom SCSS + CSS variables)
 │   │   ├── lib/
 │   │   │   ├── components/
-│   │   │   │   ├── Sidebar.svelte       # Server list with status indicators
-│   │   │   │   ├── ServerDashboard.svelte  # Main panel: WG status for selected server
-│   │   │   │   ├── AddServerModal.svelte   # Add/edit server form
-│   │   │   │   ├── PeerTable.svelte        # Peer list with actions
-│   │   │   │   ├── AddPeerModal.svelte     # Add peer form (keygen or manual key)
-│   │   │   │   ├── InterfaceModal.svelte   # Create/edit WG interface
-│   │   │   │   ├── ConfigViewer.svelte     # View config file content
-│   │   │   │   ├── StatusBadge.svelte      # Connection status dot
-│   │   │   │   ├── ThemeToggle.svelte      # Dark/light toggle
-│   │   │   │   └── ui/                     # shadcn-svelte components
+│   │   │   │   ├── Sidebar.svelte         # Server list with status dots
+│   │   │   │   ├── ServerGrid.svelte      # Empty-state server grid
+│   │   │   │   ├── ServerDashboard.svelte # Main panel: WG status for selected server
+│   │   │   │   ├── PeerTable.svelte       # Peer list with actions
+│   │   │   │   ├── AddServerModal.svelte  # Add/edit server form
+│   │   │   │   ├── AddPeerModal.svelte    # Add peer form (keygen or manual key)
+│   │   │   │   ├── EditPeerModal.svelte   # Edit peer metadata/endpoint/allowed IPs
+│   │   │   │   ├── InterfaceModal.svelte  # Create/edit WG interface
+│   │   │   │   ├── ConfigViewer.svelte    # View config file content
+│   │   │   │   ├── ConfirmDialog.svelte   # Generic confirmation dialog
+│   │   │   │   ├── LocalSetupModal.svelte # Local-mode sudo credential setup
+│   │   │   │   ├── Terminal.svelte        # Live command/output panel
+│   │   │   │   ├── Toaster.svelte         # Toast notification renderer
+│   │   │   │   ├── StatusBadge.svelte     # Connection status dot
+│   │   │   │   └── ThemeToggle.svelte     # Dark/light toggle
 │   │   │   ├── stores/
-│   │   │   │   └── servers.ts             # Svelte store wrapping Wails bindings
-│   │   │   └── utils.ts                   # cn() helper
-│   │   └── app.css                        # TailwindCSS imports
+│   │   │   │   ├── servers.ts             # Server list, selection, theme state
+│   │   │   │   ├── terminal.ts            # Per-server terminal entries
+│   │   │   │   └── toast.ts              # Toast notification queue
+│   │   │   └── utils.ts                   # cn() + unwrapResponse() helpers
+│   │   └── bindings/                      # Auto-generated Wails Go→TS bindings
 │   └── ...
 ├── docs/plan/
-│   └── architecture.md                   # This plan
+│   └── architecture.md                   # This document
+└── build/                                # Wails build config, platform Taskfiles, Dockerfiles
 ```
 
 ## Go Backend Services
 
 ### Config Store (`internal/config/store.go`)
 - Load/save server profiles to `~/.config/wireguardhub/servers.yaml`
-- Plaintext YAML for v1 (credentials included)
+- Load/save local-mode credentials to `~/.config/wireguardhub/local.yaml`
+- Plaintext YAML for v1 (credentials included); both files written with `0600` permissions
 - Uses `gopkg.in/yaml.v3` for encoding/decoding
 - Uses `adrg/xdg` for cross-platform config path
 
-### SSH Client (`internal/ssh/client.go`)
-- Connect using password or private key auth (`golang.org/x/crypto/ssh`)
-- Support optional passphrase for encrypted private keys
-- Execute commands, return stdout/stderr
-- Connection pooling: cache active SSH sessions per server ID
-- Auto-reconnect if session dropped
+### Executor Abstraction (`internal/ssh/executor.go`)
+The `Executor` interface abstracts command execution so `wireguard.Service` works against either a remote SSH server or the local machine:
+
+```go
+type Executor interface {
+    Exec(cmd string) (string, string, error)
+    ExecWithInput(cmd, input string) (string, string, error)
+    ExecStreaming(cmd string, onLine func(string)) (io.Closer, error)
+    ExecSilent(cmd string) (string, string, error)            // no terminal events (sensitive data)
+    ExecWithInputSilent(cmd, input string) (string, string, error)
+    ExecF(format string, args ...any) (string, string, error) // printf-style wrappers
+    ExecSilentF(format string, args ...any) (string, string, error)
+    ExecWithInputF(input, format string, args ...any) (string, string, error)
+    ExecWithInputSilentF(input, format string, args ...any) (string, string, error)
+    CommandExists(name string) bool                           // `command -v <name>`
+    IsConnected() bool
+    Close() error
+}
+```
+
+Two implementations:
+- **`ssh.Client`** (`internal/ssh/client.go`) — connects via `golang.org/x/crypto/ssh`, supports password/private-key auth (with optional passphrase), jump hosts, sudo via `sudo -S` (password piped to stdin), and session pooling per server ID.
+- **`local.Client`** (`internal/local/client.go`) — runs commands locally via `os/exec` (`bash -c`), handles sudo the same way (`sudo -S` with password via stdin). Used for local mode (server ID `"local"`).
+
+Both emit `ssh.ExecEvent`s (`command`/`output`/`done`) that the backend forwards to the frontend via the Wails `ssh-terminal` event, driving the Terminal panel. `ExecSilent*` variants skip event emission and are used for commands that touch private keys or config files.
 
 ### ServerService (`internal/server/service.go`)
 Exposed to frontend via Wails bindings:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `GetServers()` | `[]ServerConfig` | List all saved server profiles |
-| `AddServer(config)` | `ServerConfig` | Add a new server profile |
-| `UpdateServer(config)` | `ServerConfig` | Update an existing profile |
-| `DeleteServer(id)` | `bool` | Delete a server profile |
-| `TestConnection(config)` | `TestConnectionResult` | Try SSH connect, return success/fail with message |
+| `GetServers()` | `[]ServerConfig` | List all profiles plus a synthetic `"local"` entry |
+| `AddServer(config)` | `ServerConfig` | Add a new server profile (validates jump-host refs) |
+| `UpdateServer(config)` | `ServerConfig` | Update an existing profile (drops cached SSH session) |
+| `DeleteServer(id)` | `bool` | Delete a profile (refuses if used as a jump host) |
+| `TestConnection(config)` | `TestConnectionResult` | SSH connect (or local `wg --version` + sudo check) |
+| `GetLocalConfig()` | `LocalConfig` | Read local-mode config (password redacted) |
+| `SaveLocalConfig(cfg)` | `bool` | Persist local-mode credentials to `local.yaml` |
+| `SetLocalSessionCredentials(u, p)` | `bool` | Set session-only local credentials (not persisted) |
+| `ClearLocalSessionCredentials()` | `bool` | Drop session credentials, reload from disk |
+| `GetClient(serverID)` | `ssh.Executor` | Cached SSH client, or `local.Client` for `"local"` |
 
-### WireGuardService (`internal/wireguard/service.go`)
-Exposed to frontend via Wails bindings:
+`GetClient` caches active SSH sessions per server ID and auto-reconnects if a session drops. Jump hosts are resolved via `ViaServerID` (single hop only — a jump host cannot itself use a jump host).
+
+### WireGuardService (`internal/wireguard/`)
+Split across three files but exposed as a single `Service` via Wails bindings:
+
+**`service.go`** — status, install, parsing:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `GetStatus(serverID)` | `WGStatus` | Run `wg show all dump`, parse into structured data |
-| `CreateInterface(serverID, req)` | `WGInterface` | Generate keys, create config file, bring up interface with `wg-quick` |
-| `DeleteInterface(serverID, name)` | `bool` | Take down interface (`wg-quick down`), remove config file |
-| `GetInterfaceConfig(serverID, name)` | `string` | Return contents of `/etc/wireguard/<name>.conf` |
-| `SyncConfig(serverID, name)` | `bool` | Run `wg syncconf` to apply config changes without restart |
-| `AddPeer(req)` | `AddPeerResult` | Generate keypair via `wg genkey/pubkey`, add peer to interface, return client config |
-| `RemovePeer(serverID, iface, publicKey)` | `bool` | Remove peer from interface |
-| `GenerateKeyPair(serverID)` | `{public, private}` | Run `wg genkey` + `wg pubkey` on server |
+| `GetStatus(serverID)` | `WGStatus` | List `.conf` files, parse each, merge live `wg show all dump` stats; detects `wg` presence and sudo access; caches server info (hostname, OS, IP, package manager, HasSystemd) |
+| `InstallWireGuard(serverID)` | `bool` | Streams `apt-get`/`dnf`/`yum`/`pacman` install (with dpkg-lock retry for apt); emits `wg-install-done` event |
+| `CancelInstall()` | `bool` | Closes the running install session |
+
+**`interface.go`** — interface lifecycle:
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `GenerateKeyPair(serverID)` | `KeyPair` | `wg genkey` + `wg pubkey` |
+| `CreateInterface(req)` | `WGInterface` | Generate keys, write `/etc/wireguard/<name>.conf`, bring up via `wg-quick` or `systemctl enable --now wg-quick@<name>` |
+| `BringUpInterface(serverID, name)` | `bool` | Start via systemctl (if service enabled) or `wg-quick up` |
+| `BringDownInterface(serverID, name)` | `bool` | Stop via systemctl (if service enabled) or `wg-quick down` |
+| `RestartInterface(serverID, name)` | `bool` | stop+start via systemctl or `wg-quick down && wg-quick up` |
+| `DeleteInterface(serverID, name)` | `bool` | `systemctl disable --stop` (if enabled) or `wg-quick down`, then `rm -f` the config |
+| `EnableService(serverID, name)` | `bool` | Enable `wg-quick@<name>` for boot; atomically transitions a `wg-quick up` interface to systemd management |
+| `DisableService(serverID, name)` | `bool` | Disable `wg-quick@<name>` (does not change current run state) |
+| `GetInterfaceConfig(serverID, name)` | `string` | Read `/etc/wireguard/<name>.conf` (silent — no terminal output) |
+| `SyncConfig(serverID, name)` | `bool` | `wg-quick strip | wg syncconf … /dev/stdin` |
+
+**`peer.go`** — peer operations:
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `AddPeer(req)` | `AddPeerResult` | `wg set … peer …`, sync, append `[Peer]` section to config; detects client interfaces (no `ListenPort`) and constrains to one server peer; returns generated client config |
+| `RemovePeer(serverID, iface, pubKey)` | `bool` | `wg set … peer … remove`, sync, strip `[Peer]` section from config |
+| `UpdatePeerMeta(req)` | `UpdatePeerMetaRequest` | Update peer name/description/endpoint/allowedIPs in config; optionally apply live via `wg set`; optional interface restart |
+
+> Note: several `sudo` command chains are wrapped in a single `sudo bash -c '…'` so the sudo password (fed via stdin with `-S`) is only needed once — chaining two separate `sudo` calls with `&&` would leave the second without `-S` and no TTY, failing for non-root users.
+
+## Runtime Distro Detection
+
+There is no per-distro code or config. Instead the backend probes the host at runtime:
+
+- **Package manager** — `client.CommandExists("apt-get"|"dnf"|"yum"|"pacman")` (first match wins). Used by `InstallWireGuard` and reported in `WGStatus.PackageManager`.
+- **Init system** — `hasSystemd(client)` checks `command -v systemctl` **and** `test -d /run/systemd/system`. When true, `wg-quick@<iface>` service management (enable/disable/start/stop/restart) is available; otherwise only direct `wg-quick up/down` is used.
+- **Server info** — `hostname`, `hostname -I`, and `PRETTY_NAME` from `/etc/os-release` are read once and cached per server ID in `serverInfoCache`.
+
+See [docs/supported-distros.md](../supported-distros.md) for the supported package-manager/init combinations.
 
 ## Frontend UI
 
 ### Layout
-- **Sidebar** (left, 280px): Server list with status dots (green=connected, red=offline, gray=untested). "Add Server" button at bottom. Theme toggle at very bottom.
-- **Main panel** (right, fills remaining): Dashboard for selected server, or empty state when no server selected.
+- **Sidebar** (left): Server list with status dots (green=connected, red=offline, gray=untested), including a permanent "Local" entry. "Add Server" button and theme toggle at the bottom.
+- **Main panel** (right): `ServerGrid` empty state, or `ServerDashboard` for the selected server.
+- **Terminal panel** (bottom, collapsible): Live per-server command/output stream driven by `ssh-terminal` Wails events.
 
 ### Server Dashboard
-- **Header**: Server name, host:port, SSH status badge, refresh button, edit/delete actions
-- **Interface section**: Cards for each WG interface showing name, public key, listen port, RX/TX bytes. Each card has actions: Add Peer, View Config, Sync Config, Delete Interface
-- **Peer table**: Public key (truncated), endpoint, allowed IPs, latest handshake (relative time), transfer stats, remove button
-- **"Create Interface" button**: Opens InterfaceModal for full lifecycle creation
+- **Header**: Server name, host:port, connection status badge, refresh, edit/delete actions.
+- **Interface cards**: Name, public key, listen port, RX/TX, online/offline dot, and service-enabled state. Actions: Add Peer, View Config, Sync Config, Start/Stop/Restart, Enable/Disable service, Delete.
+- **Peer table**: Public key (truncated), name/description, endpoint, allowed IPs (chips), latest handshake (relative time), transfer stats, edit/remove actions.
 
 ### Modals
-1. **Add/Edit Server Modal**: Name, host, port, username, auth method (password/key), password or private key textarea, passphrase (optional). "Test Connection" button before saving.
-2. **Add Peer Modal**: Interface selector, public key (auto-generate or paste), allowed IPs input (tag-style), preshared key (optional), endpoint (optional), persistent keepalive (optional). Shows generated client config after success.
-3. **Create Interface Modal**: Interface name, listen port, private key (auto-generate or paste), endpoint address, default allowed IPs. Creates interface and brings it up.
-4. **Config Viewer Modal**: Read-only display of `/etc/wireguard/<name>.conf` with copy button.
+1. **Add/Edit Server Modal**: Name, host, port, username, auth method (password/key), password or private key, passphrase (optional), jump host selector. "Test Connection" before saving.
+2. **Add Peer Modal**: Interface selector, public key (auto-generate or paste), allowed IPs (chip input), preshared key, endpoint, persistent keepalive, name/description. Shows generated client config after success.
+3. **Edit Peer Modal**: Edit name/description/endpoint/allowed IPs, with optional interface restart.
+4. **Create Interface Modal**: Interface name, listen port, private key (auto or paste), endpoint, address, default allowed IPs, "enable as service" toggle.
+5. **Config Viewer Modal**: Read-only display of `/etc/wireguard/<name>.conf` with copy button.
+6. **Local Setup Modal**: Username + sudo password for local-mode access (persisted to `local.yaml` or session-only).
+7. **Confirm Dialog**: Generic confirmation (e.g. restart/delete).
 
 ### Theme
-- Dark/light toggle stored in localStorage
-- TailwindCSS `dark:` variant for dark mode
-- Default: dark theme
+- Dark/light toggle stored in `localStorage` (`wg-admin-theme`).
+- Implemented via CSS custom properties defined under `:root` (light) and `.dark` (dark) in `app.scss`; toggling adds/removes the `dark` class on `<html>`.
+- Default: dark theme.
 
 ## Data Models
 
@@ -119,6 +197,14 @@ type ServerConfig struct {
     ID, Name, Host, Username, AuthMethod string
     Port                                 int
     Password, PrivateKey, Passphrase     string // omitted from JSON if empty
+    ViaServerID                          string // optional jump host (single hop)
+    IsLocal                              bool   // synthetic "local" entry
+}
+
+type LocalConfig struct {
+    Username   string
+    Password   string // omitted from JSON if empty
+    Configured bool   // derived, not serialized
 }
 
 type WGInterface struct {
@@ -126,6 +212,8 @@ type WGInterface struct {
     ListenPort                            int
     RxBytes, TxBytes                      int64
     Peers                                 []WGPeer
+    Online                                bool
+    ServiceEnabled                        bool // wg-quick@<name> enabled in systemd
 }
 
 type WGPeer struct {
@@ -134,89 +222,39 @@ type WGPeer struct {
     LatestHandshake                   time.Time
     RxBytes, TxBytes                  int64
     PersistentKeepalive               int
+    Name, Description                 string // stored as # Name / # Description comments
+}
+
+type WGStatus struct {
+    Interfaces     []WGInterface
+    Hostname, ServerIP, OS, PackageManager string
+    WGNotInstalled bool
+    HasSystemd     bool
 }
 ```
-
-## Implementation Order
-
-1. **Re-init project**: Replace frontend with Svelte template (`wails3 init -t svelte`)
-2. **Go backend**: models → config store → SSH client → server service → wireguard service
-3. **main.go**: register services, configure window (1200x800, dark bg)
-4. **Frontend setup**: install TailwindCSS, lucide-svelte, shadcn-svelte, configure theme system
-5. **Frontend components**: Sidebar → ServerDashboard → modals → peer table → theme toggle
-6. **Wire up**: generate Wails bindings, connect Svelte stores to backend services
-7. **Build & test**: `wails3 dev` for dev, `wails3 build` for production
 
 ## Config Storage
 
-- Location: `$XDG_CONFIG_HOME/wireguardhub/servers.yaml` (e.g. `~/.config/wireguardhub/servers.yaml`)
-- Format: YAML list of `ServerConfig`
-- Plaintext for v1 — encryption can be added later
+- `~/.config/wireguardhub/servers.yaml` — YAML list of `ServerConfig` (remote profiles only; the `"local"` entry is synthetic and never persisted).
+- `~/.config/wireguardhub/local.yaml` — `LocalConfig` (sudo credentials for local mode).
+- Both files are plaintext for v1 (encryption can be added later) and written with `0600` permissions.
 
-## SSH Connection Flow
+## SSH / Local Connection Flow
 
-1. User selects a server in sidebar
-2. Frontend calls `WireGuardService.GetStatus(serverID)`
-3. Backend checks if cached SSH session exists for serverID
-4. If not, connects using stored credentials, caches session
-5. Runs `wg show all dump` over SSH, parses output
-6. Returns structured `WGStatus` to frontend
-7. Session stays cached for subsequent operations
+1. User selects a server in the sidebar (or the "Local" entry).
+2. Frontend calls `WireGuardService.GetStatus(serverID)`.
+3. `ServerService.GetClient(serverID)` returns a cached `ssh.Client` (reconnecting if dropped) or the `local.Client` for `"local"`.
+4. `GetStatus` checks `wg` presence and sudo access, runs `wg show all dump` (silent), lists `/etc/wireguard/*.conf`, parses each, and merges live peer stats.
+5. Every command (except `ExecSilent*`) emits `ssh-terminal` events that the Terminal panel renders live.
+6. The SSH session stays cached for subsequent operations on the same server.
 
-## Distro Abstraction
+## Server Mode (Headless)
 
-WireGuard operations differ across Linux distributions — package managers, init systems, and privilege escalation methods vary. The app uses a **strategy pattern** to abstract these differences behind a `Distro` interface.
+In addition to the desktop GUI, the app can be built as a pure HTTP server (`-tags server`) with no native GUI dependencies, suitable for headless/Docker deployment. Build/run tasks are defined in `Taskfile.yml` and `build/Taskfile.yml`:
 
-### Interface (`internal/wireguard/distro.go`)
+- `task build:server` — build `bin/wireguardhub-server`
+- `task run:server` — build + run a dev server
+- `task build:docker` — build a minimal Docker image (`build/docker/Dockerfile.server`)
+- `task run:docker` — build + run the Docker image (port 8080)
 
-```go
-type Distro interface {
-    ID() string
-    DisplayName() string
-    InstallWireGuard() string
-    StartInterface(name string) string
-    StopInterface(name string) string
-    EnableInterface(name string) string
-    DisableInterface(name string) string
-    WriteConfig(name, content string) string
-    ReadConfig(name string) string
-    RemoveConfig(name string) string
-    SyncConfig(name string) string
-}
-```
-
-### Concrete Implementations (`internal/wireguard/distros/`)
-
-Two shared base structs handle the common patterns:
-
-- **`systemdDistro`** — shared by Ubuntu, Fedora, openSUSE (systemctl + sudo + `/etc/wireguard/`)
-- **`openrcDistro`** — shared by Alpine (rc-service + no sudo + `/etc/wireguard/`)
-
-Each distro embeds the appropriate base and overrides `InstallWireGuard()` with its package manager command. Future distros using the same init system can reuse these bases.
-
-### Auto-Detection (`internal/wireguard/detect.go`)
-
-- Runs `cat /etc/os-release` over SSH on first connection
-- Parses `ID=` and `ID_LIKE=` fields
-- Maps to the closest supported distro
-- Falls back to a generic systemd distro if unknown
-- Result is cached for the session
-
-### Manual Override
-
-The `ServerConfig.DistroID` field allows manual selection. If set, auto-detection is skipped. The frontend exposes this as a dropdown in the Add/Edit Server modal.
-
-For the full list of supported distros and their specific commands, see [supported-distros.md](../supported-distros.md).
-
-## WireGuard CLI Commands Used
-
-- `wg show all dump` — get full status
-- `wg show <iface> dump` — get single interface status
-- `wg genkey` / `wg pubkey` — generate keypairs
-- `wg set <iface> peer <pubkey> allowed-ips <ips> [preshared-key <psk>] [endpoint <addr>] [persistent-keepalive <n>]` — add/modify peer
-- `wg set <iface> peer <pubkey> remove` — remove peer
-- `wg syncconf <iface> <(wg-quick strip <iface>)` — sync config without restart
-- `wg-quick up/down <iface>` — bring interface up/down
-- `cat /etc/wireguard/<iface>.conf` — read config file
-
-Note: The exact commands (including privilege escalation prefix and service management) are determined by the active `Distro` implementation. The commands above are the base WireGuard operations; the distro layer wraps them with the appropriate `sudo`/root prefix and service manager calls.
+Cross-compilation to darwin/linux/windows (amd64/arm64) is supported via `build/docker/Dockerfile.cross` (`task setup:docker`).

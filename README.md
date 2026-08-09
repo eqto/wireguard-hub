@@ -1,112 +1,74 @@
 # WireguardHub
 
-A cross-platform desktop application to manage multiple WireGuard VPN servers over SSH. Built with Wails 3 (Go + Svelte 5), it provides a full graphical interface for WireGuard interface lifecycle, peer management, and live status monitoring — no agent required on the server.
+<p align="center">
+  <img src="docs/wireguardhub.svg" alt="WireguardHub logo" width="160">
+</p>
 
-## Features
+WireguardHub is a desktop app that gives you a **visual point-and-click interface** for [WireGuard](https://www.wireguard.com/) VPNs. Instead of logging into each server and typing commands, you manage all your VPN servers from one window — no agent or extra software needs to be installed on the servers.
 
-- **Multi-server management** — Add, edit, and delete SSH server profiles with password or private key authentication
-- **Full interface lifecycle** — Create and delete WireGuard interfaces with automatic key generation and `wg-quick` bring-up
-- **Peer management** — Add and remove peers with auto-generated keypairs, preshared keys, allowed IPs, endpoints, and persistent keepalive
-- **Live status** — View interface and peer stats including latest handshake, transfer (RX/TX bytes), and endpoints
-- **Config viewer** — Read WireGuard config files directly from the server
-- **Distro-aware operations** — Automatically detects the server's Linux distribution and uses the correct package manager, service manager, and privilege escalation method
-- **Install WireGuard** — One-click install of WireGuard on servers that don't have it yet
-- **Jump server support** — Connect to servers through a bastion/jump host
-- **Dark/light theme** — Toggle between dark and light UI themes
+## What Can It Do?
 
-## Supported Linux Distributions
+- **Manage many servers in one place** — Keep a list of all your VPN servers and connect to any of them with a click.
+- **Work on remote servers or this computer** — Manage WireGuard on remote servers over SSH, or on the machine you're sitting at directly.
+- **Create and control VPN interfaces** — Set up a new VPN interface (with automatic key generation), then start, stop, or restart it whenever you want. You can also make a VPN start automatically when the server boots.
+- **Add and edit peers** — Add devices (peers) to a VPN, with keys generated for you. Edit their settings later, and get a ready-to-use config file for each peer.
+- **See live status** — Watch which VPNs and peers are online, how much data has been transferred, and when each peer last connected. The view updates automatically.
+- **View config files** — Open and read the WireGuard config file on any server without leaving the app.
+- **Install WireGuard with one click** — If a server doesn't have WireGuard yet, install it straight from the app (Ubuntu, Debian, Fedora, RHEL, CentOS, Arch, and related distros).
+- **Connect through a jump server** — Reach servers that are only accessible through another (bastion) server.
+- **See what's happening** — A built-in terminal panel shows every command the app runs and its output, so you always know what's going on.
+- **Dark and light themes** — Switch between dark and light appearance.
 
-| Distro | Family | Package Manager | Init System | Privilege |
-|--------|--------|----------------|-------------|-----------|
-| Ubuntu | Debian | `apt` | systemd | `sudo` |
-| Debian | Debian | `apt` | systemd | `sudo` |
-| Fedora | RHEL | `dnf` | systemd | `sudo` |
-| RHEL / Rocky / AlmaLinux | RHEL | `dnf`/`yum` | systemd | `sudo` |
-| openSUSE | SUSE | `zypper` | systemd | `sudo` |
-| Alpine | Alpine | `apk` | OpenRC | root |
+## Who Is It For?
 
-The app auto-detects the distro on first connection via `/etc/os-release`. You can also manually select the distro when adding a server. See [docs/supported-distros.md](docs/supported-distros.md) for details.
+WireguardHub is for anyone who runs WireGuard VPN servers but doesn't want to memorize the command line — homelabbers, small-business admins, and developers who manage a handful of VPN endpoints.
 
-## Prerequisites
+## What Do I Need?
 
-- [Wails 3 CLI](https://v3.wails.io/) installed
-- Go 1.21+
-- Node.js 18+
-- Linux: GTK4 + `webkitgtk-6.0` development headers
-- WireGuard installed on target servers (or use the in-app install button)
+- **Your computer** — Linux (with GTK4 / WebKitGTK 6). macOS and Windows builds are possible via cross-compilation.
+- **Your servers** — Any Linux server you can reach over SSH (or the computer you're running the app on). WireGuard doesn't need to be pre-installed — the app can install it for you.
+- **Server login** — A username and password, or a private key, for each server. For most operations you'll also need `sudo` (admin) access on the server.
 
-## Getting Started
+## Quick Start
 
-### Development
+1. **Open the app.** Your servers list starts empty (except for "Local", which is the computer you're on).
 
-```bash
-CGO_ENABLED=1 wails3 dev
-```
+2. **Add a server.** Click **Add Server**, enter the server's address, your username, and your password or private key. Click **Test Connection** to check it works, then save.
 
-This starts the app with hot-reloading for both frontend and backend.
+3. **Select the server** in the sidebar. The app connects and shows the WireGuard status for that server. If WireGuard isn't installed yet, you'll see a button to install it.
 
-### Build
+4. **Create a VPN interface.** Click **Create Interface**, give it a name and a port, and the app generates the cryptographic keys for you and brings the interface up. Tick "enable as service" if you want it to start automatically on boot.
 
-```bash
-CGO_ENABLED=1 wails3 build
-```
+5. **Add peers (devices).** Click **Add Peer** on an interface, fill in the allowed IP range, and the app generates a keypair and gives you a ready-to-paste config file for that device.
 
-The production binary is output to the `build/` directory.
+6. **Monitor.** The dashboard refreshes automatically every few seconds, showing which interfaces and peers are online, data transferred, and last handshake times.
 
-## Configuration
+## Where Are My Settings Stored?
 
-Server profiles are stored as YAML at:
+Your server list and login details are saved on your computer in:
 
 ```
 ~/.config/wireguardhub/servers.yaml
 ```
 
-Each profile includes: name, host, port, username, auth method (password/key), optional passphrase, jump server reference, and optional distro override.
-
-## Architecture
+If you use local mode (managing WireGuard on this computer), those credentials are saved separately in:
 
 ```
-WireguardHub/
-├── main.go                          # Entry point, Wails app + service registration
-├── internal/
-│   ├── models/models.go             # Data structures (ServerConfig, WGInterface, WGPeer, etc.)
-│   ├── config/store.go              # YAML config load/save (~/.config/wireguardhub/)
-│   ├── ssh/client.go                # SSH connection manager (password/key auth, jump server)
-│   ├── server/service.go            # ServerService — CRUD for server profiles, SSH session pooling
-│   └── wireguard/
-│       ├── service.go               # WireGuardService — WG operations via SSH
-│       ├── distro.go                # Distro interface (strategy pattern)
-│       ├── detect.go                # Auto-detection via /etc/os-release
-│       └── distros/                 # Concrete distro implementations
-│           ├── common.go            # Shared systemd + OpenRC base structs
-│           ├── ubuntu.go            # Ubuntu/Debian
-│           ├── fedora.go            # Fedora/RHEL
-│           ├── opensuse.go          # openSUSE
-│           └── alpine.go            # Alpine (OpenRC)
-├── frontend/
-│   ├── src/
-│   │   ├── App.svelte               # Root layout: sidebar + main panel
-│   │   ├── main.ts                  # App bootstrap
-│   │   └── lib/
-│   │       ├── components/          # UI components (Sidebar, Dashboard, modals, etc.)
-│   │       ├── stores/servers.ts    # Svelte store wrapping Wails bindings
-│   │       └── utils.ts             # Helpers
-│   └── ...
-├── docs/
-│   ├── plan/architecture.md         # Architecture overview
-│   └── supported-distros.md         # Distro support reference
-└── build/                           # Build output
+~/.config/wireguardhub/local.yaml
 ```
 
-### Tech Stack
+Both files are private to your user account.
 
-- **Wails 3** — Desktop app framework (Go backend + webview frontend)
-- **Svelte 5 + TypeScript + Vite** — Frontend
-- **TailwindCSS** — Styling
-- **shadcn-svelte** — UI components
-- **lucide-svelte** — Icons
-- **golang.org/x/crypto/ssh** — SSH client
-- **adrg/xdg** — Cross-platform config paths
-- **gopkg.in/yaml.v3** — YAML config encoding
+## Documentation
 
-For the full architecture document, see [docs/plan/architecture.md](docs/plan/architecture.md).
+| Document | For |
+|----------|-----|
+| [Development guide](docs/development.md) | Building, running, and packaging the app from source |
+| [Architecture & code flow](docs/plan/architecture.md) | How the codebase is organized and how it works internally |
+| [Supported distros](docs/supported-distros.md) | Which Linux distributions are supported and how detection works |
+| [Recommendations](docs/recommendations.md) | Known improvement opportunities for the codebase |
+
+## Getting Help
+
+- Found a bug or have a feature request? Please open an issue.
+- For WireGuard itself (not this app), see the [official WireGuard project](https://www.wireguard.com/).
