@@ -299,8 +299,11 @@ func (s *Service) SyncConfig(serverID string, name string) (bool, error) {
 		return false, err
 	}
 
-	cmd := fmt.Sprintf("sudo wg syncconf %s <(sudo wg-quick strip %s)", name, name)
-	_, stderr, err := client.Exec(cmd)
+	// Pipe the stripped config into wg syncconf via /dev/stdin. Avoid process
+	// substitution <(...) because sudo closes non-standard file descriptors, so
+	// the /dev/fd/N path created by <(...) is not accessible to wg, causing
+	// "fopen: No such file or directory". /dev/stdin (fd 0) is always available.
+	_, stderr, err := client.ExecF("sudo bash -c 'wg-quick strip %s | wg syncconf %s /dev/stdin'", name, name)
 	if err != nil {
 		return false, fmt.Errorf("failed to sync config: %s: %w", stderr, err)
 	}
