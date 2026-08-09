@@ -3,7 +3,7 @@
   import { untrack } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
-  import { unwrapResponse } from "../utils";
+  import { unwrapResponse, sortIPs } from "../utils";
 
   let {
     serverId,
@@ -137,7 +137,7 @@
         <div class="form-group">
           <label class="label" for="edit-peer-allowed-ips">Allowed IPs</label>
           <div class="chips-container">
-            {#each allowedIPs as ip (ip)}
+            {#each sortIPs(allowedIPs) as ip (ip)}
               <span class="ip-chip">
                 <button
                   type="button"
