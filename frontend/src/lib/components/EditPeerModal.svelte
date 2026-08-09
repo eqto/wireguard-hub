@@ -124,25 +124,27 @@
         </div>
       {/if}
 
-      <div class="form-group">
-        <label class="label">Name</label>
-        <input
-          bind:value={name}
-          type="text"
-          placeholder="e.g. Alice's laptop"
-          class="input"
-        />
-      </div>
+      {#if !isClientInterface}
+        <div class="form-group">
+          <label class="label">Name</label>
+          <input
+            bind:value={name}
+            type="text"
+            placeholder="e.g. Alice's laptop"
+            class="input"
+          />
+        </div>
 
-      <div class="form-group">
-        <label class="label">Description</label>
-        <input
-          bind:value={description}
-          type="text"
-          placeholder="e.g. Work laptop for remote access"
-          class="input"
-        />
-      </div>
+        <div class="form-group">
+          <label class="label">Description</label>
+          <input
+            bind:value={description}
+            type="text"
+            placeholder="e.g. Work laptop for remote access"
+            class="input"
+          />
+        </div>
+      {/if}
     </div>
 
     <div class="modal-footer">
