@@ -15,6 +15,10 @@ type Executor interface {
 	// (e.g. WireGuard .conf files containing private keys).
 	ExecSilent(cmd string) (string, string, error)
 	ExecWithInputSilent(cmd string, input string) (string, string, error)
+	// CommandExists checks whether a binary is available on the server's
+	// PATH. It runs `command -v <name>` silently and returns true if the
+	// command was found.
+	CommandExists(name string) bool
 	IsConnected() bool
 	Close() error
 }

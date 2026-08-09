@@ -53,8 +53,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	}
 
 	// Detect package manager and install
-	_, _, aptErr := client.Exec("command -v apt-get")
-	if aptErr == nil {
+	if client.CommandExists("apt-get") {
 		// Step 1: apt-get update
 		session, err := client.ExecStreaming("sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", emit)
 		s.mu.Lock()
@@ -105,8 +104,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		return true, nil
 	}
 
-	_, _, dnfErr := client.Exec("command -v dnf")
-	if dnfErr == nil {
+	if client.CommandExists("dnf") {
 		session, err := client.ExecStreaming("sudo dnf install -y wireguard-tools 2>&1", emit)
 		s.mu.Lock()
 		s.session = session
@@ -122,8 +120,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		return true, nil
 	}
 
-	_, _, yumErr := client.Exec("command -v yum")
-	if yumErr == nil {
+	if client.CommandExists("yum") {
 		session, err := client.ExecStreaming("sudo yum install -y epel-release 2>&1 && sudo yum install -y wireguard-tools 2>&1", emit)
 		s.mu.Lock()
 		s.session = session
@@ -139,8 +136,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		return true, nil
 	}
 
-	_, _, pacmanErr := client.Exec("command -v pacman")
-	if pacmanErr == nil {
+	if client.CommandExists("pacman") {
 		session, err := client.ExecStreaming("sudo pacman -S --noconfirm wireguard-tools 2>&1", emit)
 		s.mu.Lock()
 		s.session = session
@@ -177,8 +173,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 	}
 
 	// Check if wg binary exists on the server.
-	_, _, wgErr := client.ExecSilent("command -v wg")
-	if wgErr != nil {
+	if !client.CommandExists("wg") {
 		status := models.WGStatus{
 			Interfaces:     []models.WGInterface{},
 			WGNotInstalled: true,
@@ -295,13 +290,13 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 		}
 	}
 
-	if _, _, err := client.Exec("command -v apt-get"); err == nil {
+	if client.CommandExists("apt-get") {
 		status.PackageManager = "apt"
-	} else if _, _, err := client.Exec("command -v dnf"); err == nil {
+	} else if client.CommandExists("dnf") {
 		status.PackageManager = "dnf"
-	} else if _, _, err := client.Exec("command -v yum"); err == nil {
+	} else if client.CommandExists("yum") {
 		status.PackageManager = "yum"
-	} else if _, _, err := client.Exec("command -v pacman"); err == nil {
+	} else if client.CommandExists("pacman") {
 		status.PackageManager = "pacman"
 	}
 
@@ -322,10 +317,10 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 // systemctl available. Used to decide whether wg-quick@<iface> service
 // management is possible.
 func hasSystemd(client ssh.Executor) bool {
-	if _, _, err := client.Exec("command -v systemctl"); err != nil {
+	if !client.CommandExists("systemctl") {
 		return false
 	}
-	if _, _, err := client.Exec("test -d /run/systemd/system"); err != nil {
+	if _, _, err := client.ExecSilent("test -d /run/systemd/system"); err != nil {
 		return false
 	}
 	return true

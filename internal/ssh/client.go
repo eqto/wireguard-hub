@@ -126,6 +126,12 @@ func (c *Client) ExecSilent(cmd string) (string, string, error) {
 	return c.ExecWithInputSilent(cmd, "")
 }
 
+// CommandExists checks whether a binary is available on the server's PATH.
+func (c *Client) CommandExists(name string) bool {
+	_, _, err := c.ExecSilent("command -v " + name)
+	return err == nil
+}
+
 // ExecWithInputSilent runs a command with stdin input without emitting
 // terminal events. Use for commands that handle sensitive data.
 func (c *Client) ExecWithInputSilent(cmd string, input string) (string, string, error) {
