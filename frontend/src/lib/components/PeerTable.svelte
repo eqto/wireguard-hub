@@ -11,10 +11,12 @@
     peers,
     onRemove,
     onEdit,
+    showRemove = true,
   }: {
     peers: any[];
     onRemove: (pubKey: string) => void;
     onEdit: (peer: any) => void;
+    showRemove?: boolean;
   } = $props();
 </script>
 
@@ -121,13 +123,15 @@
                     style="color: var(--text-secondary);"
                   />
                 </button>
-                <button
-                  onclick={() => onRemove(peer.publicKey)}
-                  class="peer-remove-btn"
-                  title="Remove peer"
-                >
-                  <Trash2 class="icon-sm" style="color: var(--danger);" />
-                </button>
+                {#if showRemove}
+                  <button
+                    onclick={() => onRemove(peer.publicKey)}
+                    class="peer-remove-btn"
+                    title="Remove peer"
+                  >
+                    <Trash2 class="icon-sm" style="color: var(--danger);" />
+                  </button>
+                {/if}
               </div>
             </td>
           </tr>

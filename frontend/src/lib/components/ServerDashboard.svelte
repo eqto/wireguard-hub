@@ -515,11 +515,7 @@
                 {iface.name}
               </h2>
               {#if !iface.online}
-                <span
-                  class="status-dot"
-                  title="Disconnected"
-                  style="background-color: var(--danger);"
-                ></span>
+                <!-- no dot when interface is not running -->
               {:else if (iface.peers || []).some( (p) => isHandshakeFresh(p.latestHandshake), )}
                 <span
                   class="status-dot"
