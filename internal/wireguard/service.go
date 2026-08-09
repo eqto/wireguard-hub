@@ -177,7 +177,7 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 	}
 
 	// Check if wg binary exists on the server.
-	_, _, wgErr := client.Exec("command -v wg")
+	_, _, wgErr := client.ExecSilent("command -v wg")
 	if wgErr != nil {
 		status := models.WGStatus{
 			Interfaces:     []models.WGInterface{},
