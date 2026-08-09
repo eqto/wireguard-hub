@@ -23,6 +23,7 @@
   let endpoint = $state("");
   let generating = $state(false);
   let creating = $state(false);
+  let enableService = $state(false);
 
   onMount(() => {
     handleGenerate();
@@ -51,6 +52,8 @@
         privateKey: privateKey,
         address: address,
         endpoint: endpoint,
+        allowedIPs: [],
+        enableService: enableService,
       };
       await WireguardService.CreateInterface(req);
       if (onCreated) onCreated();
@@ -176,6 +179,22 @@
           </button>
         </div>
       </div>
+
+      <div class="form-group">
+        <label class="checkbox-row">
+          <input
+            bind:checked={enableService}
+            type="checkbox"
+            class="checkbox"
+          />
+          <span>Start as systemd service (autostart on boot)</span>
+        </label>
+        <p class="checkbox-hint">
+          When enabled, the interface is managed via
+          <code>wg-quick@{name || "wg0"}</code> and starts automatically on boot.
+          Requires systemd on the server.
+        </p>
+      </div>
     </div>
 
     <div class="modal-footer">
@@ -256,6 +275,34 @@
     &.active {
       background-color: var(--accent);
       color: white;
+    }
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+
+  .checkbox-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    margin-bottom: 0;
+
+    code {
+      font-family: "Courier New", monospace;
+      font-size: 11px;
     }
   }
 </style>

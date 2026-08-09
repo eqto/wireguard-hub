@@ -23,6 +23,8 @@
   import Download from "@lucide/svelte/icons/download";
   import Square from "@lucide/svelte/icons/square";
   import Power from "@lucide/svelte/icons/power";
+  import PlugZap from "@lucide/svelte/icons/plug-zap";
+  import Plug from "@lucide/svelte/icons/plug";
 
   let {
     serverId,
@@ -155,6 +157,24 @@
   async function handleRemovePeer(iface: string, publicKey: string) {
     try {
       await WireguardService.RemovePeer(serverId, iface, publicKey);
+      await loadStatus();
+    } catch (e: any) {
+      error.set(e?.message || String(e));
+    }
+  }
+
+  async function handleEnableService(iface: string) {
+    try {
+      await WireguardService.EnableService(serverId, iface);
+      await loadStatus();
+    } catch (e: any) {
+      error.set(e?.message || String(e));
+    }
+  }
+
+  async function handleDisableService(iface: string) {
+    try {
+      await WireguardService.DisableService(serverId, iface);
       await loadStatus();
     } catch (e: any) {
       error.set(e?.message || String(e));
@@ -422,6 +442,25 @@
                   <Sync class="icon" style="color: var(--text-secondary);" />
                 </button>
               {/if}
+              {#if status?.hasSystemd}
+                {#if iface.serviceEnabled}
+                  <button
+                    onclick={() => handleDisableService(iface.name)}
+                    class="btn-icon btn-icon-small"
+                    title="Service enabled (autostart on boot) — click to disable"
+                  >
+                    <PlugZap class="icon" style="color: var(--success);" />
+                  </button>
+                {:else}
+                  <button
+                    onclick={() => handleEnableService(iface.name)}
+                    class="btn-icon btn-icon-small"
+                    title="Run as systemd service (autostart on boot)"
+                  >
+                    <Plug class="icon" style="color: var(--text-muted);" />
+                  </button>
+                {/if}
+              {/if}
               {#if !iface.online}
                 <button
                   onclick={() => handleBringUp(iface.name)}
@@ -555,6 +594,25 @@
                 >
                   <Sync class="icon" style="color: var(--text-secondary);" />
                 </button>
+              {/if}
+              {#if status?.hasSystemd}
+                {#if iface.serviceEnabled}
+                  <button
+                    onclick={() => handleDisableService(iface.name)}
+                    class="btn-icon btn-icon-small"
+                    title="Service enabled (autostart on boot) — click to disable"
+                  >
+                    <PlugZap class="icon" style="color: var(--success);" />
+                  </button>
+                {:else}
+                  <button
+                    onclick={() => handleEnableService(iface.name)}
+                    class="btn-icon btn-icon-small"
+                    title="Run as systemd service (autostart on boot)"
+                  >
+                    <Plug class="icon" style="color: var(--text-muted);" />
+                  </button>
+                {/if}
               {/if}
               {#if !iface.online}
                 <button

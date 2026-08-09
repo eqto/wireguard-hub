@@ -23,15 +23,16 @@ type LocalConfig struct {
 }
 
 type WGInterface struct {
-	Name       string   `yaml:"name" json:"name"`
-	PublicKey  string   `yaml:"publicKey" json:"publicKey"`
-	PrivateKey string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
-	ListenPort int      `yaml:"listenPort" json:"listenPort"`
-	Endpoint   string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	RxBytes    int64    `yaml:"rxBytes" json:"rxBytes"`
-	TxBytes    int64    `yaml:"txBytes" json:"txBytes"`
-	Peers      []WGPeer `yaml:"peers" json:"peers"`
-	Online     bool     `yaml:"online" json:"online"`
+	Name           string   `yaml:"name" json:"name"`
+	PublicKey      string   `yaml:"publicKey" json:"publicKey"`
+	PrivateKey     string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
+	ListenPort     int      `yaml:"listenPort" json:"listenPort"`
+	Endpoint       string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	RxBytes        int64    `yaml:"rxBytes" json:"rxBytes"`
+	TxBytes        int64    `yaml:"txBytes" json:"txBytes"`
+	Peers          []WGPeer `yaml:"peers" json:"peers"`
+	Online         bool     `yaml:"online" json:"online"`
+	ServiceEnabled bool     `yaml:"serviceEnabled,omitempty" json:"serviceEnabled,omitempty"`
 }
 
 type WGPeer struct {
@@ -54,6 +55,7 @@ type WGStatus struct {
 	OS             string        `yaml:"os,omitempty" json:"os,omitempty"`
 	PackageManager string        `yaml:"packageManager,omitempty" json:"packageManager,omitempty"`
 	WGNotInstalled bool          `yaml:"wgNotInstalled,omitempty" json:"wgNotInstalled,omitempty"`
+	HasSystemd     bool          `yaml:"hasSystemd,omitempty" json:"hasSystemd,omitempty"`
 }
 
 type AddPeerRequest struct {
@@ -74,13 +76,14 @@ type AddPeerResult struct {
 }
 
 type CreateInterfaceRequest struct {
-	ServerID   string   `yaml:"serverId" json:"serverId"`
-	Name       string   `yaml:"name" json:"name"`
-	ListenPort int      `yaml:"listenPort" json:"listenPort"`
-	PrivateKey string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
-	Endpoint   string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
-	AllowedIPs []string `yaml:"allowedIPs,omitempty" json:"allowedIPs,omitempty"`
-	Address    string   `yaml:"address,omitempty" json:"address,omitempty"`
+	ServerID      string   `yaml:"serverId" json:"serverId"`
+	Name          string   `yaml:"name" json:"name"`
+	ListenPort    int      `yaml:"listenPort" json:"listenPort"`
+	PrivateKey    string   `yaml:"privateKey,omitempty" json:"privateKey,omitempty"`
+	Endpoint      string   `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	AllowedIPs    []string `yaml:"allowedIPs,omitempty" json:"allowedIPs,omitempty"`
+	Address       string   `yaml:"address,omitempty" json:"address,omitempty"`
+	EnableService bool     `yaml:"enableService,omitempty" json:"enableService,omitempty"`
 }
 
 type KeyPair struct {

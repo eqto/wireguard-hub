@@ -30,6 +30,7 @@ type serverInfo struct {
 	ServerIP       string
 	OS             string
 	PackageManager string
+	HasSystemd     bool
 }
 
 func NewService(serverSvc *server.Service) *Service {
@@ -208,6 +209,10 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 
 	// 2. List all .conf files and parse each one.
 	status := models.WGStatus{Interfaces: []models.WGInterface{}}
+	// Populate server info (incl. HasSystemd) up front so we can decide
+	// whether to query systemctl per interface below.
+	s.fillServerInfo(serverID, client, &status)
+
 	confListOut, _, _ := client.ExecSilent("sudo bash -c 'ls /etc/wireguard/*.conf 2>/dev/null'")
 	for _, confPath := range strings.Split(strings.TrimSpace(confListOut), "\n") {
 		confPath = strings.TrimSpace(confPath)
@@ -252,10 +257,13 @@ func (s *Service) GetStatus(serverID string) (models.WGStatus, error) {
 			}
 		}
 
+		// 4. Detect systemd service enabled state when systemd is available.
+		if status.HasSystemd {
+			iface.ServiceEnabled = isServiceEnabled(client, ifaceName)
+		}
+
 		status.Interfaces = append(status.Interfaces, iface)
 	}
-
-	s.fillServerInfo(serverID, client, &status)
 
 	return status, nil
 }
@@ -269,6 +277,7 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 		status.ServerIP = cached.ServerIP
 		status.OS = cached.OS
 		status.PackageManager = cached.PackageManager
+		status.HasSystemd = cached.HasSystemd
 		return
 	}
 
@@ -296,14 +305,40 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 		status.PackageManager = "pacman"
 	}
 
+	status.HasSystemd = hasSystemd(client)
+
 	s.serverInfoMu.Lock()
 	s.serverInfoCache[serverID] = serverInfo{
 		Hostname:       status.Hostname,
 		ServerIP:       status.ServerIP,
 		OS:             status.OS,
 		PackageManager: status.PackageManager,
+		HasSystemd:     status.HasSystemd,
 	}
 	s.serverInfoMu.Unlock()
+}
+
+// hasSystemd reports whether the host is booted with systemd and has
+// systemctl available. Used to decide whether wg-quick@<iface> service
+// management is possible.
+func hasSystemd(client ssh.Executor) bool {
+	if _, _, err := client.Exec("command -v systemctl"); err != nil {
+		return false
+	}
+	if _, _, err := client.Exec("test -d /run/systemd/system"); err != nil {
+		return false
+	}
+	return true
+}
+
+// isServiceEnabled reports whether wg-quick@<iface> is enabled in systemd.
+// Only returns true when `systemctl is-enabled` prints exactly "enabled".
+func isServiceEnabled(client ssh.Executor, iface string) bool {
+	out, _, err := client.ExecSilent(fmt.Sprintf("systemctl is-enabled wg-quick@%s 2>/dev/null", iface))
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) == "enabled"
 }
 
 func parseWGDump(output string) models.WGStatus {
@@ -559,25 +594,107 @@ func (s *Service) CreateInterface(req models.CreateInterfaceRequest) (models.WGI
 		return models.WGInterface{}, fmt.Errorf("failed to write config file: %s: %w", stderr, err)
 	}
 
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo wg-quick up %s", req.Name))
-	if err != nil {
-		return models.WGInterface{}, fmt.Errorf("failed to bring up interface: %s: %w", stderr, err)
+	// Bring up the interface. When the user requested "run as service" and
+	// systemd is available, enable + start the wg-quick@<name> unit so it
+	// auto-starts on boot. Otherwise fall back to wg-quick up directly.
+	serviceEnabled := false
+	if req.EnableService && hasSystemd(client) {
+		_, stderr, err = client.Exec(fmt.Sprintf("sudo systemctl enable --now wg-quick@%s", req.Name))
+		if err != nil {
+			return models.WGInterface{}, fmt.Errorf("failed to enable wg-quick@%s service: %s: %w", req.Name, stderr, err)
+		}
+		serviceEnabled = true
+	} else {
+		_, stderr, err = client.Exec(fmt.Sprintf("sudo wg-quick up %s", req.Name))
+		if err != nil {
+			return models.WGInterface{}, fmt.Errorf("failed to bring up interface: %s: %w", stderr, err)
+		}
 	}
 
 	return models.WGInterface{
-		Name:       req.Name,
-		PublicKey:  pubKey,
-		PrivateKey: privKey,
-		ListenPort: req.ListenPort,
-		Endpoint:   req.Endpoint,
-		Peers:      []models.WGPeer{},
+		Name:           req.Name,
+		PublicKey:      pubKey,
+		PrivateKey:     privKey,
+		ListenPort:     req.ListenPort,
+		Endpoint:       req.Endpoint,
+		Peers:          []models.WGPeer{},
+		ServiceEnabled: serviceEnabled,
 	}, nil
+}
+
+// EnableService enables the wg-quick@<name> systemd unit so the interface
+// auto-starts on boot. If the interface is currently up via wg-quick, it is
+// transitioned to systemd management atomically in a single command
+// (wg-quick down && systemctl enable --now) to avoid leaving the interface
+// down with the service not started.
+func (s *Service) EnableService(serverID string, name string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+	if !hasSystemd(client) {
+		return false, fmt.Errorf("systemd not available on this server")
+	}
+
+	// Check if the interface is currently up via wg-quick (not via systemctl).
+	_, _, showErr := client.ExecSilent(fmt.Sprintf("sudo wg show %s", name))
+	ifaceOnline := showErr == nil
+	alreadyEnabled := isServiceEnabled(client, name)
+
+	if ifaceOnline && !alreadyEnabled {
+		// Atomic transition: tear down wg-quick, then enable+start the unit.
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s && sudo systemctl enable --now wg-quick@%s", name, name))
+		if err != nil {
+			return false, fmt.Errorf("failed to enable service: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
+	// Either already enabled, or interface is down: just enable (and start
+	// if currently up via the service, which is a no-op then).
+	if alreadyEnabled {
+		return true, nil
+	}
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl enable wg-quick@%s", name))
+	if err != nil {
+		return false, fmt.Errorf("failed to enable service: %s: %w", stderr, err)
+	}
+	return true, nil
+}
+
+// DisableService disables the wg-quick@<name> systemd unit so the interface
+// no longer auto-starts on boot. This does not change the current run state
+// of the interface.
+func (s *Service) DisableService(serverID string, name string) (bool, error) {
+	client, err := s.serverSvc.GetClient(serverID)
+	if err != nil {
+		return false, err
+	}
+	if !hasSystemd(client) {
+		return false, fmt.Errorf("systemd not available on this server")
+	}
+
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl disable wg-quick@%s", name))
+	if err != nil {
+		return false, fmt.Errorf("failed to disable service: %s: %w", stderr, err)
+	}
+	return true, nil
 }
 
 func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
 		return false, err
+	}
+
+	// When the wg-quick@<name> service is enabled, start via systemctl so
+	// systemd tracks the unit state. Otherwise fall back to wg-quick up.
+	if hasSystemd(client) && isServiceEnabled(client, name) {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl start wg-quick@%s", name))
+		if err != nil {
+			return false, fmt.Errorf("failed to start service: %s: %w", stderr, err)
+		}
+		return true, nil
 	}
 
 	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick up %s", name))
@@ -594,6 +711,16 @@ func (s *Service) BringDownInterface(serverID string, name string) (bool, error)
 		return false, err
 	}
 
+	// When the wg-quick@<name> service is enabled, stop via systemctl so
+	// systemd tracks the unit state. Otherwise fall back to wg-quick down.
+	if hasSystemd(client) && isServiceEnabled(client, name) {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl stop wg-quick@%s", name))
+		if err != nil {
+			return false, fmt.Errorf("failed to stop service: %s: %w", stderr, err)
+		}
+		return true, nil
+	}
+
 	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s", name))
 	if err != nil {
 		return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
@@ -606,6 +733,16 @@ func (s *Service) RestartInterface(serverID string, name string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
 		return false, err
+	}
+
+	// When the wg-quick@<name> service is enabled, restart via systemctl so
+	// systemd tracks the unit state. Otherwise fall back to wg-quick.
+	if hasSystemd(client) && isServiceEnabled(client, name) {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl restart wg-quick@%s", name))
+		if err != nil {
+			return false, fmt.Errorf("failed to restart service: %s: %w", stderr, err)
+		}
+		return true, nil
 	}
 
 	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s && sudo wg-quick up %s", name, name))
@@ -622,12 +759,21 @@ func (s *Service) DeleteInterface(serverID string, name string) (bool, error) {
 		return false, err
 	}
 
-	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s", name))
-	if err != nil {
-		return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
+	// If the wg-quick@<name> service is enabled, disable + stop it in one
+	// step so it won't auto-start on boot and the unit is torn down cleanly.
+	if hasSystemd(client) && isServiceEnabled(client, name) {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl disable --stop wg-quick@%s", name))
+		if err != nil {
+			return false, fmt.Errorf("failed to disable service: %s: %w", stderr, err)
+		}
+	} else {
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s", name))
+		if err != nil {
+			return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
+		}
 	}
 
-	_, stderr, err = client.Exec(fmt.Sprintf("sudo rm -f /etc/wireguard/%s.conf", name))
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo rm -f /etc/wireguard/%s.conf", name))
 	if err != nil {
 		return false, fmt.Errorf("failed to remove config file: %s: %w", stderr, err)
 	}
