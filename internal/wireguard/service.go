@@ -121,7 +121,7 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	}
 
 	if client.CommandExists("yum") {
-		session, err := client.ExecStreaming("sudo yum install -y epel-release 2>&1 && sudo yum install -y wireguard-tools 2>&1", emit)
+		session, err := client.ExecStreaming("sudo bash -c 'yum install -y epel-release 2>&1 && yum install -y wireguard-tools 2>&1'", emit)
 		s.mu.Lock()
 		s.session = session
 		s.mu.Unlock()
@@ -638,19 +638,24 @@ func (s *Service) EnableService(serverID string, name string) (bool, error) {
 
 	if ifaceOnline && !alreadyEnabled {
 		// Atomic transition: tear down wg-quick, then enable+start the unit.
-		_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s && sudo systemctl enable --now wg-quick@%s", name, name))
+		// Wrap both commands in a single `sudo bash -c` so the sudo password
+		// (fed via stdin with -S) is only needed once. Chaining two separate
+		// `sudo` calls with && would leave the second one without -S and no TTY
+		// to prompt for the password, causing it to fail for non-root users.
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo bash -c 'wg-quick down %s && systemctl enable --now wg-quick@%s'", name, name))
 		if err != nil {
 			return false, fmt.Errorf("failed to enable service: %s: %w", stderr, err)
 		}
 		return true, nil
 	}
 
-	// Either already enabled, or interface is down: just enable (and start
-	// if currently up via the service, which is a no-op then).
+	// Either already enabled, or interface is down. If already enabled, this
+	// is a no-op. Otherwise enable AND start the unit now (--now) so the
+	// interface comes up immediately, matching the create-with-service flow.
 	if alreadyEnabled {
 		return true, nil
 	}
-	_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl enable wg-quick@%s", name))
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl enable --now wg-quick@%s", name))
 	if err != nil {
 		return false, fmt.Errorf("failed to enable service: %s: %w", stderr, err)
 	}
@@ -685,7 +690,14 @@ func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
 	// When the wg-quick@<name> service is enabled, start via systemctl so
 	// systemd tracks the unit state. Otherwise fall back to wg-quick up.
 	if hasSystemd(client) && isServiceEnabled(client, name) {
-		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl start wg-quick@%s", name))
+		// wg-quick@.service is a oneshot with RemainAfterExit=yes. After the
+		// interface is brought up, the service stays "active (exited)" even if
+		// the interface later goes down (manually, crash, etc.). In that state
+		// `systemctl start` is a silent no-op — the interface never comes up.
+		// Fix: stop first (reset the unit state, ignoring errors if the
+		// interface is already down), then start. Wrapped in a single
+		// `sudo bash -c` so the sudo password is only needed once.
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'", name, name))
 		if err != nil {
 			return false, fmt.Errorf("failed to start service: %s: %w", stderr, err)
 		}
@@ -731,16 +743,20 @@ func (s *Service) RestartInterface(serverID string, name string) (bool, error) {
 	}
 
 	// When the wg-quick@<name> service is enabled, restart via systemctl so
-	// systemd tracks the unit state. Otherwise fall back to wg-quick.
+	// systemd tracks the unit state. Use stop+start (with ';') instead of
+	// restart, because restart may abort if the stop step fails when the
+	// interface is already down (see BringUpInterface for details).
 	if hasSystemd(client) && isServiceEnabled(client, name) {
-		_, stderr, err := client.Exec(fmt.Sprintf("sudo systemctl restart wg-quick@%s", name))
+		_, stderr, err := client.Exec(fmt.Sprintf("sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'", name, name))
 		if err != nil {
 			return false, fmt.Errorf("failed to restart service: %s: %w", stderr, err)
 		}
 		return true, nil
 	}
 
-	_, stderr, err := client.Exec(fmt.Sprintf("sudo wg-quick down %s && sudo wg-quick up %s", name, name))
+	// Wrap in a single `sudo bash -c` so the sudo password is only needed once
+	// (see EnableService for details on the chained-sudo password issue).
+	_, stderr, err := client.Exec(fmt.Sprintf("sudo bash -c 'wg-quick down %s && wg-quick up %s'", name, name))
 	if err != nil {
 		return false, fmt.Errorf("failed to restart interface: %s: %w", stderr, err)
 	}
