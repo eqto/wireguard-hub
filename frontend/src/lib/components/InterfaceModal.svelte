@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Loader2, Sparkles } from "@lucide/svelte";
+  import { X, LoaderCircle, Sparkles } from "@lucide/svelte";
   import { onMount } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
@@ -168,7 +168,7 @@
             title="Generate keypair on server"
           >
             {#if generating}
-              <Loader2 class="icon spin" />
+              <LoaderCircle class="icon spin" />
             {:else}
               <Sparkles class="icon" />
             {/if}
@@ -195,7 +195,7 @@
         class="btn btn-primary"
       >
         {#if creating}
-          <Loader2 class="icon spin" />
+          <LoaderCircle class="icon spin" />
         {/if}
         Create
       </button>

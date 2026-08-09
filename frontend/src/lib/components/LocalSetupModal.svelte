@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { X, Loader2 } from "@lucide/svelte";
+  import { X, LoaderCircle } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { unwrapResponse } from "../utils";
@@ -142,7 +142,7 @@
           class="btn btn-primary"
         >
           {#if saving}
-            <Loader2 class="icon spin" />
+            <LoaderCircle class="icon spin" />
           {/if}
           Open
         </button>

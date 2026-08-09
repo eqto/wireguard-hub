@@ -9,7 +9,7 @@
   import Shield from "@lucide/svelte/icons/shield";
   import PanelLeft from "@lucide/svelte/icons/panel-left";
   import Settings from "@lucide/svelte/icons/settings";
-  import Loader2 from "@lucide/svelte/icons/loader-2";
+  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
 
   let {
     onSelect,
@@ -70,7 +70,7 @@
             style="background-color: {statusColor(server.status)};"
           ></div>
           {#if connecting === server.id}
-            <Loader2
+            <LoaderCircle
               class="server-card-icon spin"
               style="color: var(--accent);"
             />

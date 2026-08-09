@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Loader2 } from "@lucide/svelte";
+  import { X, LoaderCircle } from "@lucide/svelte";
   import { untrack } from "svelte";
   import * as WireguardService from "../../../bindings/wireguardhub/internal/wireguard/service.js";
   import { error } from "../stores/servers";
@@ -164,7 +164,7 @@
       </button>
       <button onclick={handleSave} disabled={saving} class="btn btn-primary">
         {#if saving}
-          <Loader2 class="icon spin" />
+          <LoaderCircle class="icon spin" />
         {/if}
         Save
       </button>

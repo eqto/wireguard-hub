@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Plug, Loader2 } from "@lucide/svelte";
+  import { X, Plug, LoaderCircle } from "@lucide/svelte";
   import * as ServerService from "../../../bindings/wireguardhub/internal/server/service.js";
   import { error, servers } from "../stores/servers";
   import { showToast } from "../stores/toast";
@@ -235,7 +235,7 @@
         class="btn btn-secondary"
       >
         {#if testing}
-          <Loader2 class="icon spin" />
+          <LoaderCircle class="icon spin" />
         {:else}
           <Plug class="icon" />
         {/if}
@@ -255,7 +255,7 @@
           class="btn btn-primary"
         >
           {#if saving}
-            <Loader2 class="icon spin" />
+            <LoaderCircle class="icon spin" />
           {/if}
           {server ? "Update" : "Add"}
         </button>

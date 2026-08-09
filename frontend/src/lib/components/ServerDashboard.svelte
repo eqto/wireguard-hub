@@ -19,7 +19,7 @@
   import Plus from "@lucide/svelte/icons/plus";
   import FileText from "@lucide/svelte/icons/file-text";
   import Sync from "@lucide/svelte/icons/refresh-ccw";
-  import Loader2 from "@lucide/svelte/icons/loader-2";
+  import LoaderCircle from "@lucide/svelte/icons/loader-circle";
   import Download from "@lucide/svelte/icons/download";
   import Square from "@lucide/svelte/icons/square";
   import Power from "@lucide/svelte/icons/power";
@@ -268,7 +268,7 @@
           class="btn btn-secondary"
         >
           {#if isLoading}
-            <Loader2 class="icon spin" />
+            <LoaderCircle class="icon spin" />
           {:else}
             <RefreshCw class="icon" />
           {/if}
@@ -296,7 +296,7 @@
 
   {#if isLoading && !status}
     <div class="dashboard-loading">
-      <Loader2
+      <LoaderCircle
         class="icon-lg spin"
         style="color: var(--accent); width: 32px; height: 32px;"
       />
@@ -304,7 +304,7 @@
   {:else if wgNotInstalled}
     <div class="dashboard-empty">
       {#if installing}
-        <Loader2
+        <LoaderCircle
           class="icon-lg spin"
           style="color: var(--accent); width: 32px; height: 32px;"
         />
@@ -316,7 +316,7 @@
           Cancel
         </button>
       {:else if installDone && installSuccess}
-        <Loader2
+        <LoaderCircle
           class="icon-lg spin"
           style="color: var(--accent); width: 32px; height: 32px;"
         />
