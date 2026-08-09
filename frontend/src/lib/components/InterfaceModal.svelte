@@ -76,6 +76,7 @@
   <div
     class="modal"
     onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
     role="dialog"
     tabindex="0"
   >
@@ -88,7 +89,7 @@
 
     <div class="modal-body">
       <div class="form-group">
-        <label class="label">Mode</label>
+        <span class="label">Mode</span>
         <div class="mode-toggle">
           <button
             type="button"
@@ -111,8 +112,9 @@
 
       {#if mode === "client"}
         <div class="form-group">
-          <label class="label">Server Address</label>
+          <label class="label" for="endpoint">Server Address</label>
           <input
+            id="endpoint"
             bind:value={endpoint}
             type="text"
             placeholder="vpn.example.com:51820"
@@ -123,8 +125,9 @@
 
       <div class="form-row">
         <div class="form-group form-grow">
-          <label class="label">Interface Name</label>
+          <label class="label" for="name">Interface Name</label>
           <input
+            id="name"
             bind:value={name}
             type="text"
             placeholder="wg0"
@@ -133,8 +136,9 @@
         </div>
         {#if mode === "server"}
           <div class="form-group form-fixed-128">
-            <label class="label">Listen Port</label>
+            <label class="label" for="listenPort">Listen Port</label>
             <input
+              id="listenPort"
               bind:value={listenPort}
               type="number"
               placeholder="51820"
@@ -145,8 +149,9 @@
       </div>
 
       <div class="form-group">
-        <label class="label">Address</label>
+        <label class="label" for="address">Address</label>
         <input
+          id="address"
           bind:value={address}
           type="text"
           placeholder="10.0.0.1/24"
@@ -155,9 +160,10 @@
       </div>
 
       <div class="form-group">
-        <label class="label">Private Key</label>
+        <label class="label" for="privateKey">Private Key</label>
         <div class="input-row">
           <input
+            id="privateKey"
             bind:value={privateKey}
             type="text"
             placeholder="Auto-generated or paste existing"
