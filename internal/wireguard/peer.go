@@ -219,180 +219,31 @@ func (s *Service) UpdatePeerMeta(req models.UpdatePeerMetaRequest) (bool, error)
 
 // removePeerSection removes the [Peer] section matching the given public key from the config text.
 func removePeerSection(configText string, publicKey string) string {
-	lines := strings.Split(configText, "\n")
-	var result []string
-
-	inPeerSection := false
-	skipSection := false
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "[Peer]" {
-			inPeerSection = true
-			skipSection = false
-			// Look ahead: we need to buffer lines until we find the PublicKey
-			// We'll add the [Peer] line tentatively and remove later if it matches
-			result = append(result, line)
-			continue
-		}
-
-		if trimmed == "[Interface]" {
-			inPeerSection = false
-			skipSection = false
-			result = append(result, line)
-			continue
-		}
-
-		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
-			parts := strings.SplitN(trimmed, "=", 2)
-			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
-				// Remove the buffered [Peer] line and skip this entire section
-				result = result[:len(result)-1] // remove the "[Peer]" line we added
-				skipSection = true
-				continue
-			}
-		}
-
-		if skipSection {
-			continue
-		}
-
-		result = append(result, line)
-	}
-
-	return strings.Join(result, "\n")
+	cfg := parseWGConfig(configText)
+	cfg.removePeer(publicKey)
+	return cfg.serialize()
 }
 
 // updatePeerFieldInConfig updates a field (e.g. Endpoint, AllowedIPs) in the [Peer] section
 // matching the given public key. Returns the original text if peer not found.
 func updatePeerFieldInConfig(configText string, publicKey string, field string, value string) string {
-	lines := strings.Split(configText, "\n")
-	inPeerSection := false
-	foundPeer := false
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "[Peer]" {
-			inPeerSection = true
-			foundPeer = false
-			continue
-		}
-
-		if trimmed == "[Interface]" {
-			inPeerSection = false
-			continue
-		}
-
-		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
-			parts := strings.SplitN(trimmed, "=", 2)
-			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
-				foundPeer = true
-			}
-			continue
-		}
-
-		if inPeerSection && foundPeer && strings.HasPrefix(strings.ToLower(trimmed), strings.ToLower(field)) {
-			lines[i] = fmt.Sprintf("%s = %s", field, value)
-			return strings.Join(lines, "\n")
-		}
+	cfg := parseWGConfig(configText)
+	peer := cfg.findPeer(publicKey)
+	if peer == nil {
+		return configText
 	}
-
-	// Field not found in peer section; nothing to update.
-	return configText
+	peer.set(field, value)
+	return cfg.serialize()
 }
 
 // updatePeerMetaInConfig adds or updates # Name and # Description comments in the
 // [Peer] section matching the given public key. Returns empty string if peer not found.
 func updatePeerMetaInConfig(configText string, publicKey string, name string, description string) string {
-	lines := strings.Split(configText, "\n")
-
-	inPeerSection := false
-	foundPeer := false
-	pubKeyLineIdx := -1
-
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "[Peer]" {
-			inPeerSection = true
-			foundPeer = false
-			pubKeyLineIdx = -1
-			continue
-		}
-
-		if trimmed == "[Interface]" {
-			inPeerSection = false
-			continue
-		}
-
-		if inPeerSection && strings.HasPrefix(strings.ToLower(trimmed), "publickey") {
-			parts := strings.SplitN(trimmed, "=", 2)
-			if len(parts) == 2 && strings.TrimSpace(parts[1]) == publicKey {
-				foundPeer = true
-				pubKeyLineIdx = i
-			}
-		}
-	}
-
-	if !foundPeer || pubKeyLineIdx == -1 {
+	cfg := parseWGConfig(configText)
+	peer := cfg.findPeer(publicKey)
+	if peer == nil {
 		return ""
 	}
-
-	// Find the extent of this peer's metadata comments (Name/Description right after PublicKey)
-	// and also find where the next non-comment, non-empty line is (end of metadata zone).
-	hasName := false
-	hasDescription := false
-	nameLineIdx := -1
-	descLineIdx := -1
-
-	for i := pubKeyLineIdx + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		lower := strings.ToLower(trimmed)
-		if strings.HasPrefix(lower, "# name") {
-			hasName = true
-			nameLineIdx = i
-		} else if strings.HasPrefix(lower, "# description") {
-			hasDescription = true
-			descLineIdx = i
-		} else if strings.HasPrefix(trimmed, "#") || trimmed == "" {
-			continue
-		} else {
-			break
-		}
-	}
-
-	// Build replacement lines for metadata
-	var metaLines []string
-	if name != "" {
-		metaLines = append(metaLines, fmt.Sprintf("# Name = %s", name))
-	}
-	if description != "" {
-		metaLines = append(metaLines, fmt.Sprintf("# Description = %s", description))
-	}
-
-	// Determine the range to replace
-	startIdx := pubKeyLineIdx + 1
-	endIdx := pubKeyLineIdx // exclusive end, nothing to remove by default
-
-	// Find the range of existing Name/Description comments
-	if hasName && hasDescription {
-		startIdx = min(nameLineIdx, descLineIdx)
-		endIdx = max(nameLineIdx, descLineIdx) + 1
-	} else if hasName {
-		startIdx = nameLineIdx
-		endIdx = nameLineIdx + 1
-	} else if hasDescription {
-		startIdx = descLineIdx
-		endIdx = descLineIdx + 1
-	}
-
-	// Replace the range with new metadata lines
-	var newLines []string
-	newLines = append(newLines, lines[:startIdx]...)
-	newLines = append(newLines, metaLines...)
-	newLines = append(newLines, lines[endIdx:]...)
-
-	return strings.Join(newLines, "\n")
+	peer.setMetadata(name, description)
+	return cfg.serialize()
 }

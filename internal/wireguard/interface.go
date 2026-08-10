@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"wireguardhub/internal/models"
+	"wireguardhub/internal/ssh"
 )
 
 func (s *Service) GenerateKeyPair(serverID string) (models.KeyPair, error) {
@@ -168,6 +169,25 @@ func (s *Service) DisableService(serverID string, name string) (bool, error) {
 	return true, nil
 }
 
+// runInterfaceCmd runs either the systemctl or wg-quick command for an
+// interface, depending on whether systemd is available and the wg-quick@
+// unit is enabled. systemctlAction and wgQuickAction are used in the error
+// message for the respective branch.
+func runInterfaceCmd(client ssh.Executor, name, systemctlAction, wgQuickAction, systemctlFmt, wgQuickFmt string) error {
+	if hasSystemd(client) && isServiceEnabled(client, name) {
+		_, stderr, err := client.ExecF(systemctlFmt, name, name)
+		if err != nil {
+			return fmt.Errorf("failed to %s: %s: %w", systemctlAction, stderr, err)
+		}
+		return nil
+	}
+	_, stderr, err := client.ExecF(wgQuickFmt, name, name)
+	if err != nil {
+		return fmt.Errorf("failed to %s: %s: %w", wgQuickAction, stderr, err)
+	}
+	return nil
+}
+
 func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
@@ -176,26 +196,19 @@ func (s *Service) BringUpInterface(serverID string, name string) (bool, error) {
 
 	// When the wg-quick@<name> service is enabled, start via systemctl so
 	// systemd tracks the unit state. Otherwise fall back to wg-quick up.
-	if hasSystemd(client) && isServiceEnabled(client, name) {
-		// wg-quick@.service is a oneshot with RemainAfterExit=yes. After the
-		// interface is brought up, the service stays "active (exited)" even if
-		// the interface later goes down (manually, crash, etc.). In that state
-		// `systemctl start` is a silent no-op — the interface never comes up.
-		// Fix: stop first (reset the unit state, ignoring errors if the
-		// interface is already down), then start. Wrapped in a single
-		// `sudo bash -c` so the sudo password is only needed once.
-		_, stderr, err := client.ExecF("sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'", name, name)
-		if err != nil {
-			return false, fmt.Errorf("failed to start service: %s: %w", stderr, err)
-		}
-		return true, nil
+	// wg-quick@.service is a oneshot with RemainAfterExit=yes. After the
+	// interface is brought up, the service stays "active (exited)" even if
+	// the interface later goes down (manually, crash, etc.). In that state
+	// `systemctl start` is a silent no-op — the interface never comes up.
+	// Fix: stop first (reset the unit state, ignoring errors if the
+	// interface is already down), then start. Wrapped in a single
+	// `sudo bash -c` so the sudo password is only needed once.
+	if err := runInterfaceCmd(client, name,
+		"start service", "bring up interface",
+		"sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'",
+		"sudo wg-quick up %s"); err != nil {
+		return false, err
 	}
-
-	_, stderr, err := client.ExecF("sudo wg-quick up %s", name)
-	if err != nil {
-		return false, fmt.Errorf("failed to bring up interface: %s: %w", stderr, err)
-	}
-
 	return true, nil
 }
 
@@ -207,19 +220,12 @@ func (s *Service) BringDownInterface(serverID string, name string) (bool, error)
 
 	// When the wg-quick@<name> service is enabled, stop via systemctl so
 	// systemd tracks the unit state. Otherwise fall back to wg-quick down.
-	if hasSystemd(client) && isServiceEnabled(client, name) {
-		_, stderr, err := client.ExecF("sudo systemctl stop wg-quick@%s", name)
-		if err != nil {
-			return false, fmt.Errorf("failed to stop service: %s: %w", stderr, err)
-		}
-		return true, nil
+	if err := runInterfaceCmd(client, name,
+		"stop service", "bring down interface",
+		"sudo systemctl stop wg-quick@%s",
+		"sudo wg-quick down %s"); err != nil {
+		return false, err
 	}
-
-	_, stderr, err := client.ExecF("sudo wg-quick down %s", name)
-	if err != nil {
-		return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
-	}
-
 	return true, nil
 }
 
@@ -233,21 +239,14 @@ func (s *Service) RestartInterface(serverID string, name string) (bool, error) {
 	// systemd tracks the unit state. Use stop+start (with ';') instead of
 	// restart, because restart may abort if the stop step fails when the
 	// interface is already down (see BringUpInterface for details).
-	if hasSystemd(client) && isServiceEnabled(client, name) {
-		_, stderr, err := client.ExecF("sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'", name, name)
-		if err != nil {
-			return false, fmt.Errorf("failed to restart service: %s: %w", stderr, err)
-		}
-		return true, nil
-	}
-
 	// Wrap in a single `sudo bash -c` so the sudo password is only needed once
 	// (see EnableService for details on the chained-sudo password issue).
-	_, stderr, err := client.ExecF("sudo bash -c 'wg-quick down %s && wg-quick up %s'", name, name)
-	if err != nil {
-		return false, fmt.Errorf("failed to restart interface: %s: %w", stderr, err)
+	if err := runInterfaceCmd(client, name,
+		"restart service", "restart interface",
+		"sudo bash -c 'systemctl stop wg-quick@%s 2>/dev/null; systemctl start wg-quick@%s'",
+		"sudo bash -c 'wg-quick down %s && wg-quick up %s'"); err != nil {
+		return false, err
 	}
-
 	return true, nil
 }
 
@@ -259,16 +258,11 @@ func (s *Service) DeleteInterface(serverID string, name string) (bool, error) {
 
 	// If the wg-quick@<name> service is enabled, disable + stop it in one
 	// step so it won't auto-start on boot and the unit is torn down cleanly.
-	if hasSystemd(client) && isServiceEnabled(client, name) {
-		_, stderr, err := client.ExecF("sudo systemctl disable --stop wg-quick@%s", name)
-		if err != nil {
-			return false, fmt.Errorf("failed to disable service: %s: %w", stderr, err)
-		}
-	} else {
-		_, stderr, err := client.ExecF("sudo wg-quick down %s", name)
-		if err != nil {
-			return false, fmt.Errorf("failed to bring down interface: %s: %w", stderr, err)
-		}
+	if err := runInterfaceCmd(client, name,
+		"disable service", "bring down interface",
+		"sudo systemctl disable --stop wg-quick@%s",
+		"sudo wg-quick down %s"); err != nil {
+		return false, err
 	}
 
 	_, stderr, err := client.ExecF("sudo rm -f /etc/wireguard/%s.conf", name)

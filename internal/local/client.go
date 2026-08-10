@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 
 	"wireguardhub/internal/ssh"
 )
@@ -15,23 +14,14 @@ import (
 // It implements ssh.Executor so that wireguard.Service can use it
 // interchangeably with the SSH client.
 type Client struct {
-	sudoPassword string
-	ServerID     string
-	OnExec       func(ssh.ExecEvent)
+	*ssh.BaseExecutor
 }
 
 // NewClient creates a local execution client. The sudoPassword is used
 // to handle sudo commands the same way the SSH client does (sudo -S with
 // password piped via stdin).
 func NewClient(sudoPassword string) *Client {
-	return &Client{sudoPassword: sudoPassword}
-}
-
-func (c *Client) emit(e ssh.ExecEvent) {
-	if c.OnExec != nil {
-		e.ServerID = c.ServerID
-		c.OnExec(e)
-	}
+	return &Client{BaseExecutor: &ssh.BaseExecutor{SudoPassword: sudoPassword}}
 }
 
 func (c *Client) Exec(cmd string) (string, string, error) {
@@ -61,26 +51,7 @@ func (c *Client) ExecWithInputSilentF(input, format string, args ...any) (string
 }
 
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
-	c.emit(ssh.ExecEvent{Kind: "command", Command: cmd})
-	stdout, stderr, err := c.execInternal(cmd, input)
-	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
-		if line != "" {
-			c.emit(ssh.ExecEvent{Kind: "output", Line: line})
-		}
-	}
-	if stderr != "" {
-		for _, line := range strings.Split(strings.TrimRight(stderr, "\n"), "\n") {
-			if line != "" {
-				c.emit(ssh.ExecEvent{Kind: "output", Line: line})
-			}
-		}
-	}
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
-	}
-	c.emit(ssh.ExecEvent{Kind: "done", Error: errMsg})
-	return stdout, stderr, err
+	return c.ExecWithEmit(c.execInternal, cmd, input)
 }
 
 // ExecSilent runs a command without emitting terminal events.
@@ -103,16 +74,10 @@ func (c *Client) ExecWithInputSilent(cmd string, input string) (string, string, 
 // execInternal runs a command locally and returns stdout/stderr/error
 // without emitting any terminal events.
 func (c *Client) execInternal(cmd string, input string) (string, string, error) {
-	finalCmd := cmd
-	finalInput := input
-	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
-		if c.sudoPassword != "" {
-			finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
-			finalInput = c.sudoPassword + "\n" + input
-		} else {
-			return "", "", fmt.Errorf("no sudo password configured")
-		}
+	if ssh.NeedsSudoPassword(cmd) && c.SudoPassword == "" {
+		return "", "", fmt.Errorf("no sudo password configured")
 	}
+	finalCmd, finalInput := c.RewriteSudo(cmd, input)
 
 	ec := exec.Command("bash", "-c", finalCmd)
 
@@ -141,18 +106,12 @@ func (p *processCloser) Close() error {
 }
 
 func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, error) {
-	c.emit(ssh.ExecEvent{Kind: "command", Command: cmd})
+	c.Emit(ssh.ExecEvent{Kind: "command", Command: cmd})
 
-	finalCmd := cmd
-	finalInput := ""
-	if strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
-		if c.sudoPassword != "" {
-			finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
-			finalInput = c.sudoPassword + "\n"
-		} else {
-			return nil, fmt.Errorf("no sudo password configured")
-		}
+	if ssh.NeedsSudoPassword(cmd) && c.SudoPassword == "" {
+		return nil, fmt.Errorf("no sudo password configured")
 	}
+	finalCmd, finalInput := c.RewriteSudo(cmd, "")
 
 	ec := exec.Command("bash", "-c", finalCmd)
 
@@ -174,7 +133,7 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 			if onLine != nil {
 				onLine(line)
 			} else {
-				c.emit(ssh.ExecEvent{Kind: "output", Line: line})
+				c.Emit(ssh.ExecEvent{Kind: "output", Line: line})
 			}
 		}
 	}()
@@ -182,7 +141,7 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 	err := ec.Start()
 	if err != nil {
 		pw.Close()
-		c.emit(ssh.ExecEvent{Kind: "done", Error: err.Error()})
+		c.Emit(ssh.ExecEvent{Kind: "done", Error: err.Error()})
 		return nil, fmt.Errorf("failed to start command: %w", err)
 	}
 
@@ -194,7 +153,7 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 		if ec.ProcessState != nil && !ec.ProcessState.Success() {
 			errMsg = fmt.Sprintf("exit status %d", ec.ProcessState.ExitCode())
 		}
-		c.emit(ssh.ExecEvent{Kind: "done", Error: errMsg})
+		c.Emit(ssh.ExecEvent{Kind: "done", Error: errMsg})
 	}()
 
 	return &processCloser{cmd: ec}, nil

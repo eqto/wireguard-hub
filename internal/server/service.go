@@ -189,87 +189,47 @@ func (s *Service) TestConnection(server models.ServerConfig) (models.TestConnect
 
 func (s *Service) testLocalConnection() (models.TestConnectionResult, error) {
 	client := s.getOrCreateLocalClient()
-
-	stdout, _, err := client.Exec("wg --version")
-	if err != nil {
-		return models.TestConnectionResult{
-			Success: true,
-			Message: "Local access works, but WireGuard may not be installed. " + stdout,
-		}, nil
-	}
-
-	uidOut, _, _ := client.Exec("id -u")
-	isRoot := strings.TrimSpace(uidOut) == "0"
-
-	if !isRoot {
-		_, stderr, err := client.Exec("sudo true")
-		if err != nil {
-			msg := strings.TrimSpace(stderr)
-			return models.TestConnectionResult{
-				Success: false,
-				Message: "Sudo authentication failed: " + msg,
-			}, nil
-		}
-	}
-
-	return models.TestConnectionResult{
-		Success: true,
-		Message: "Connected locally. WireGuard is installed.",
-	}, nil
+	return ssh.VerifyWGAndSudo(client, "Connected locally", false)
 }
 
-// validateViaServerLocked checks ViaServerID constraints while holding s.mu.
-// It does NOT establish a connection to the jump server.
-func (s *Service) validateViaServerLocked(server models.ServerConfig) error {
-	if server.ViaServerID == "" {
-		return nil
-	}
-	if server.ViaServerID == server.ID {
-		return fmt.Errorf("cannot use server as its own jump host")
-	}
-	var jump *models.ServerConfig
-	for i := range s.servers {
-		if s.servers[i].ID == server.ViaServerID {
-			jump = &s.servers[i]
-			break
-		}
-	}
-	if jump == nil {
-		return fmt.Errorf("jump server not found: %s", server.ViaServerID)
-	}
-	if jump.ViaServerID != "" {
-		return fmt.Errorf("jump server %q must be a direct-connect server (single hop only)", jump.Name)
-	}
-	return nil
-}
-
-// resolveJump returns an SSH client for the jump server referenced by server.ViaServerID.
-// Must be called WITHOUT holding s.mu (it calls GetClient which locks).
-func (s *Service) resolveJump(server models.ServerConfig) (ssh.Executor, error) {
+// findJumpLocked looks up the jump server referenced by server.ViaServerID and
+// validates the single-hop constraint. Must be called while holding s.mu (or
+// s.mu.RLock). Returns nil jump with nil error when no jump host is configured.
+func (s *Service) findJumpLocked(server models.ServerConfig) (*models.ServerConfig, error) {
 	if server.ViaServerID == "" {
 		return nil, nil
 	}
 	if server.ViaServerID == server.ID {
 		return nil, fmt.Errorf("cannot use server as its own jump host")
 	}
-
-	s.mu.RLock()
-	var jump *models.ServerConfig
 	for i := range s.servers {
 		if s.servers[i].ID == server.ViaServerID {
-			jump = &s.servers[i]
-			break
+			jump := &s.servers[i]
+			if jump.ViaServerID != "" {
+				return nil, fmt.Errorf("jump server %q must be a direct-connect server (single hop only)", jump.Name)
+			}
+			return jump, nil
 		}
 	}
+	return nil, fmt.Errorf("jump server not found: %s", server.ViaServerID)
+}
+
+// validateViaServerLocked checks ViaServerID constraints while holding s.mu.
+// It does NOT establish a connection to the jump server.
+func (s *Service) validateViaServerLocked(server models.ServerConfig) error {
+	_, err := s.findJumpLocked(server)
+	return err
+}
+
+// resolveJump returns an SSH client for the jump server referenced by server.ViaServerID.
+// Must be called WITHOUT holding s.mu (it calls GetClient which locks).
+func (s *Service) resolveJump(server models.ServerConfig) (ssh.Executor, error) {
+	s.mu.RLock()
+	jump, err := s.findJumpLocked(server)
 	s.mu.RUnlock()
-
-	if jump == nil {
-		return nil, fmt.Errorf("jump server not found: %s", server.ViaServerID)
+	if err != nil || jump == nil {
+		return nil, err
 	}
-	if jump.ViaServerID != "" {
-		return nil, fmt.Errorf("jump server %q must be a direct-connect server (single hop only)", jump.Name)
-	}
-
 	return s.GetClient(jump.ID)
 }
 

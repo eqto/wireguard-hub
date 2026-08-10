@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
@@ -15,10 +14,8 @@ import (
 )
 
 type Client struct {
-	client       *ssh.Client
-	sudoPassword string
-	ServerID     string
-	OnExec       func(ExecEvent)
+	client *ssh.Client
+	*BaseExecutor
 }
 
 type ExecEvent struct {
@@ -27,16 +24,6 @@ type ExecEvent struct {
 	Command  string `json:"command,omitempty"`
 	Line     string `json:"line,omitempty"`
 	Error    string `json:"error,omitempty"`
-}
-
-func (c *Client) emit(e ExecEvent) {
-	if c.OnExec != nil {
-		e.ServerID = c.ServerID
-		log.Printf("[ssh-terminal] emitting: serverId=%s kind=%s command=%q line=%q error=%q", e.ServerID, e.Kind, e.Command, e.Line, e.Error)
-		c.OnExec(e)
-	} else {
-		log.Printf("[ssh-terminal] OnExec is nil for serverId=%s, skipping emit", c.ServerID)
-	}
 }
 
 func Connect(server models.ServerConfig, jump Executor) (*Client, error) {
@@ -61,7 +48,7 @@ func Connect(server models.ServerConfig, jump Executor) (*Client, error) {
 			return nil, fmt.Errorf("failed to handshake with %s via jump server: %w", addr, err)
 		}
 
-		return &Client{client: ssh.NewClient(nconn, chans, reqs), sudoPassword: server.Password}, nil
+		return &Client{client: ssh.NewClient(nconn, chans, reqs), BaseExecutor: &BaseExecutor{SudoPassword: server.Password}}, nil
 	}
 
 	conn, err := ssh.Dial("tcp", addr, config)
@@ -69,7 +56,7 @@ func Connect(server models.ServerConfig, jump Executor) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to %s: %w", addr, err)
 	}
 
-	return &Client{client: conn, sudoPassword: server.Password}, nil
+	return &Client{client: conn, BaseExecutor: &BaseExecutor{SudoPassword: server.Password}}, nil
 }
 
 func buildClientConfig(server models.ServerConfig) (*ssh.ClientConfig, string, error) {
@@ -132,15 +119,7 @@ func (c *Client) ExecWithInputSilentF(input, format string, args ...any) (string
 }
 
 func (c *Client) ExecWithInput(cmd string, input string) (string, string, error) {
-	c.emit(ExecEvent{Kind: "command", Command: cmd})
-	stdout, stderr, err := c.execInternal(cmd, input)
-	c.emitOutput(stdout, stderr)
-	errMsg := ""
-	if err != nil {
-		errMsg = err.Error()
-	}
-	c.emit(ExecEvent{Kind: "done", Error: errMsg})
-	return stdout, stderr, err
+	return c.ExecWithEmit(c.execInternal, cmd, input)
 }
 
 // ExecSilent runs a command without emitting terminal events.
@@ -170,16 +149,7 @@ func (c *Client) execInternal(cmd string, input string) (string, string, error) 
 	}
 	defer session.Close()
 
-	// If a sudo password is configured and the command uses sudo, switch to
-	// `sudo -S` so the password is read from stdin. Prepend the password to
-	// any existing input. Use `-p ''` to suppress the password prompt so it
-	// doesn't pollute stdout/stderr.
-	finalCmd := cmd
-	finalInput := input
-	if c.sudoPassword != "" && strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
-		finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
-		finalInput = c.sudoPassword + "\n" + input
-	}
+	finalCmd, finalInput := c.RewriteSudo(cmd, input)
 
 	var stdout, stderr bytes.Buffer
 	session.Stdout = &stdout
@@ -192,26 +162,10 @@ func (c *Client) execInternal(cmd string, input string) (string, string, error) 
 	return stdout.String(), stderr.String(), err
 }
 
-// emitOutput emits stdout/stderr lines as "output" events to the terminal.
-func (c *Client) emitOutput(stdout, stderr string) {
-	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
-		if line != "" {
-			c.emit(ExecEvent{Kind: "output", Line: line})
-		}
-	}
-	if stderr != "" {
-		for _, line := range strings.Split(strings.TrimRight(stderr, "\n"), "\n") {
-			if line != "" {
-				c.emit(ExecEvent{Kind: "output", Line: line})
-			}
-		}
-	}
-}
-
 // ExecStreaming runs a command and calls onLine for each line of stdout/stderr.
 // Returns an io.Closer (the underlying session, can be closed to cancel) and error from Run.
 func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, error) {
-	c.emit(ExecEvent{Kind: "command", Command: cmd})
+	c.Emit(ExecEvent{Kind: "command", Command: cmd})
 
 	session, err := c.client.NewSession()
 	if err != nil {
@@ -219,16 +173,11 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 		if err != nil {
 			errMsg = err.Error()
 		}
-		c.emit(ExecEvent{Kind: "done", Error: errMsg})
+		c.Emit(ExecEvent{Kind: "done", Error: errMsg})
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	finalCmd := cmd
-	finalInput := ""
-	if c.sudoPassword != "" && strings.HasPrefix(cmd, "sudo ") && !strings.HasPrefix(cmd, "sudo -S") {
-		finalCmd = "sudo -S -p '' " + strings.TrimPrefix(cmd, "sudo ")
-		finalInput = c.sudoPassword + "\n"
-	}
+	finalCmd, finalInput := c.RewriteSudo(cmd, "")
 
 	if finalInput != "" {
 		session.Stdin = bytes.NewBufferString(finalInput)
@@ -249,7 +198,7 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 			if onLine != nil {
 				onLine(line)
 			} else {
-				c.emit(ExecEvent{Kind: "output", Line: line})
+				c.Emit(ExecEvent{Kind: "output", Line: line})
 			}
 		}
 	}()
@@ -263,7 +212,7 @@ func (c *Client) ExecStreaming(cmd string, onLine func(string)) (io.Closer, erro
 	if err != nil {
 		errMsg = err.Error()
 	}
-	c.emit(ExecEvent{Kind: "done", Error: errMsg})
+	c.Emit(ExecEvent{Kind: "done", Error: errMsg})
 
 	return session, err
 }
@@ -297,37 +246,49 @@ func TestConnection(server models.ServerConfig, jump Executor) (*models.TestConn
 	}
 	defer client.Close()
 
+	result, err := VerifyWGAndSudo(client, "SSH connected", true)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifyWGAndSudo checks that WireGuard is installed and sudo works on the
+// host. prefix is used in result messages (e.g. "SSH connected" or "Connected
+// locally"). When requireSudoPassword is true and the user is not root, the
+// check fails early if no sudo password is configured on an SSH client.
+func VerifyWGAndSudo(client Executor, prefix string, requireSudoPassword bool) (models.TestConnectionResult, error) {
 	stdout, _, err := client.Exec("wg --version")
 	if err != nil {
-		return &models.TestConnectionResult{
+		return models.TestConnectionResult{
 			Success: true,
-			Message: "SSH connected, but WireGuard may not be installed. " + stdout,
+			Message: prefix + ", but WireGuard may not be installed. " + stdout,
 		}, nil
 	}
 
-	// Check sudo capability.
 	uidOut, _, _ := client.Exec("id -u")
 	isRoot := strings.TrimSpace(uidOut) == "0"
 
 	if !isRoot {
-		if client.sudoPassword != "" {
-			_, stderr, err := client.Exec("sudo -S true")
-			if err != nil {
-				return &models.TestConnectionResult{
+		if requireSudoPassword {
+			if c, ok := client.(*Client); ok && c.SudoPassword == "" {
+				return models.TestConnectionResult{
 					Success: false,
-					Message: "SSH connected, but sudo authentication failed: " + strings.TrimSpace(stderr),
+					Message: prefix + ", but no sudo password configured. Configure sudo credentials for this server.",
 				}, nil
 			}
-		} else {
-			return &models.TestConnectionResult{
+		}
+		_, stderr, err := client.Exec("sudo true")
+		if err != nil {
+			return models.TestConnectionResult{
 				Success: false,
-				Message: "SSH connected, but no sudo password configured. Configure sudo credentials for this server.",
+				Message: prefix + ", but sudo authentication failed: " + strings.TrimSpace(stderr),
 			}, nil
 		}
 	}
 
-	return &models.TestConnectionResult{
+	return models.TestConnectionResult{
 		Success: true,
-		Message: "Connected. " + stdout,
+		Message: prefix + ". " + stdout,
 	}, nil
 }

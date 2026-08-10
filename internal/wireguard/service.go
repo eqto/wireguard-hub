@@ -40,7 +40,7 @@ func NewService(serverSvc *server.Service) *Service {
 func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 	client, err := s.serverSvc.GetClient(serverID)
 	if err != nil {
-		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
+		emitInstallDone(false, err.Error())
 		return false, err
 	}
 
@@ -52,108 +52,88 @@ func (s *Service) InstallWireGuard(serverID string) (bool, error) {
 		})
 	}
 
-	// Detect package manager and install
-	if client.CommandExists("apt-get") {
-		// Step 1: apt-get update
-		session, err := client.ExecStreaming("sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", emit)
-		s.mu.Lock()
-		s.session = session
-		s.mu.Unlock()
-		if err != nil {
-			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
-			return false, err
-		}
-		s.mu.Lock()
-		s.session = nil
-		s.mu.Unlock()
+	fail := func(e error) (bool, error) {
+		emitInstallDone(false, e.Error())
+		return false, e
+	}
 
+	switch detectPackageManager(client) {
+	case "apt":
+		// Step 1: apt-get update
+		if err := s.runInstallStep(client, "sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get update -y 2>&1", emit); err != nil {
+			return fail(err)
+		}
 		// Step 2: apt-get install with retry for dpkg lock
 		installCmd := "sudo env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt-get install -y wireguard wireguard-tools 2>&1"
 		var installErr error
 		for attempt := 1; attempt <= 6; attempt++ {
-			session, err = client.ExecStreaming(installCmd, emit)
-			s.mu.Lock()
-			s.session = session
-			s.mu.Unlock()
-			if err == nil {
-				s.mu.Lock()
-				s.session = nil
-				s.mu.Unlock()
-				installErr = nil
+			installErr = s.runInstallStep(client, installCmd, emit)
+			if installErr == nil {
 				break
 			}
-			s.mu.Lock()
-			s.session = nil
-			s.mu.Unlock()
-			installErr = err
-			errMsg := err.Error()
-			if strings.Contains(errMsg, "lock") || strings.Contains(errMsg, "held by process") {
-				if attempt < 6 {
-					emit(fmt.Sprintf("Waiting for package manager lock... (attempt %d/6)", attempt+1))
-					time.Sleep(5 * time.Second)
-					continue
-				}
+			errMsg := installErr.Error()
+			if (strings.Contains(errMsg, "lock") || strings.Contains(errMsg, "held by process")) && attempt < 6 {
+				emit(fmt.Sprintf("Waiting for package manager lock... (attempt %d/6)", attempt+1))
+				time.Sleep(5 * time.Second)
+				continue
 			}
 			break
 		}
 		if installErr != nil {
-			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": installErr.Error()})
-			return false, installErr
+			return fail(installErr)
 		}
-		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
+		emitInstallDone(true, "")
+		return true, nil
+
+	case "dnf":
+		if err := s.runInstallStep(client, "sudo dnf install -y wireguard-tools 2>&1", emit); err != nil {
+			return fail(err)
+		}
+		emitInstallDone(true, "")
+		return true, nil
+
+	case "yum":
+		if err := s.runInstallStep(client, "sudo bash -c 'yum install -y epel-release 2>&1 && yum install -y wireguard-tools 2>&1'", emit); err != nil {
+			return fail(err)
+		}
+		emitInstallDone(true, "")
+		return true, nil
+
+	case "pacman":
+		if err := s.runInstallStep(client, "sudo pacman -S --noconfirm wireguard-tools 2>&1", emit); err != nil {
+			return fail(err)
+		}
+		emitInstallDone(true, "")
 		return true, nil
 	}
 
-	if client.CommandExists("dnf") {
-		session, err := client.ExecStreaming("sudo dnf install -y wireguard-tools 2>&1", emit)
-		s.mu.Lock()
-		s.session = session
-		s.mu.Unlock()
-		if err != nil {
-			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
-			return false, err
-		}
-		s.mu.Lock()
-		s.session = nil
-		s.mu.Unlock()
-		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
-		return true, nil
-	}
+	return fail(fmt.Errorf("no supported package manager found (apt/dnf/yum/pacman)"))
+}
 
-	if client.CommandExists("yum") {
-		session, err := client.ExecStreaming("sudo bash -c 'yum install -y epel-release 2>&1 && yum install -y wireguard-tools 2>&1'", emit)
-		s.mu.Lock()
-		s.session = session
-		s.mu.Unlock()
-		if err != nil {
-			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
-			return false, err
-		}
-		s.mu.Lock()
-		s.session = nil
-		s.mu.Unlock()
-		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
-		return true, nil
+// runInstallStep runs cmd via ExecStreaming, tracking the session for
+// cancellation (s.session) and clearing it on completion. Returns nil on
+// success.
+func (s *Service) runInstallStep(client ssh.Executor, cmd string, emit func(string)) error {
+	session, err := client.ExecStreaming(cmd, emit)
+	s.mu.Lock()
+	s.session = session
+	s.mu.Unlock()
+	if err != nil {
+		return err
 	}
+	s.mu.Lock()
+	s.session = nil
+	s.mu.Unlock()
+	return nil
+}
 
-	if client.CommandExists("pacman") {
-		session, err := client.ExecStreaming("sudo pacman -S --noconfirm wireguard-tools 2>&1", emit)
-		s.mu.Lock()
-		s.session = session
-		s.mu.Unlock()
-		if err != nil {
-			application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": err.Error()})
-			return false, err
-		}
-		s.mu.Lock()
-		s.session = nil
-		s.mu.Unlock()
-		application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": true})
-		return true, nil
+// emitInstallDone emits the wg-install-done event with the given result.
+func emitInstallDone(success bool, errMsg string) {
+	data := map[string]interface{}{"success": success}
+	if errMsg != "" {
+		data["error"] = errMsg
 	}
-
-	application.Get().Event.Emit("wg-install-done", map[string]interface{}{"success": false, "error": "no supported package manager found"})
-	return false, fmt.Errorf("no supported package manager found (apt/dnf/yum/pacman)")
+	application.Get().Event.Emit("wg-install-done", data)
 }
 
 func (s *Service) CancelInstall() (bool, error) {
@@ -290,15 +270,7 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 		}
 	}
 
-	if client.CommandExists("apt-get") {
-		status.PackageManager = "apt"
-	} else if client.CommandExists("dnf") {
-		status.PackageManager = "dnf"
-	} else if client.CommandExists("yum") {
-		status.PackageManager = "yum"
-	} else if client.CommandExists("pacman") {
-		status.PackageManager = "pacman"
-	}
+	status.PackageManager = detectPackageManager(client)
 
 	status.HasSystemd = hasSystemd(client)
 
@@ -311,6 +283,23 @@ func (s *Service) fillServerInfo(serverID string, client ssh.Executor, status *m
 		HasSystemd:     status.HasSystemd,
 	}
 	s.serverInfoMu.Unlock()
+}
+
+// detectPackageManager probes the host for a supported package manager and
+// returns its short name ("apt", "dnf", "yum", "pacman") or "" if none is
+// found.
+func detectPackageManager(client ssh.Executor) string {
+	switch {
+	case client.CommandExists("apt-get"):
+		return "apt"
+	case client.CommandExists("dnf"):
+		return "dnf"
+	case client.CommandExists("yum"):
+		return "yum"
+	case client.CommandExists("pacman"):
+		return "pacman"
+	}
+	return ""
 }
 
 // hasSystemd reports whether the host is booted with systemd and has
@@ -420,93 +409,63 @@ func parseWGDump(output string) models.WGStatus {
 }
 
 func configHasListenPort(configText string) bool {
-	for _, line := range strings.Split(configText, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "ListenPort") {
-			return true
-		}
-	}
-	return false
+	cfg := parseWGConfig(configText)
+	return cfg.interfaceSection != nil && cfg.interfaceSection.get("listenport") != ""
 }
 
 func parseInterfaceConfig(configText, ifaceName string) models.WGInterface {
+	cfg := parseWGConfig(configText)
 	iface := models.WGInterface{
 		Name:   ifaceName,
 		Online: false,
 		Peers:  []models.WGPeer{},
 	}
 
-	inPeerSection := false
-	var currentPeer *models.WGPeer
-
-	for _, line := range strings.Split(configText, "\n") {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "[Peer]" {
-			if currentPeer != nil {
-				iface.Peers = append(iface.Peers, *currentPeer)
+	if cfg.interfaceSection != nil {
+		for _, l := range cfg.interfaceSection.lines {
+			if !l.isKV {
+				continue
 			}
-			currentPeer = &models.WGPeer{AllowedIPs: []string{}}
-			inPeerSection = true
-			continue
-		}
-
-		if trimmed == "[Interface]" {
-			if currentPeer != nil {
-				iface.Peers = append(iface.Peers, *currentPeer)
-				currentPeer = nil
-			}
-			inPeerSection = false
-			continue
-		}
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(strings.ToLower(trimmed), "# name") && !strings.HasPrefix(strings.ToLower(trimmed), "# description") {
-			continue
-		}
-
-		parts := strings.SplitN(trimmed, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(parts[0]))
-		val := strings.TrimSpace(parts[1])
-
-		if !inPeerSection {
-			switch key {
+			switch l.key {
 			case "privatekey":
-				iface.PrivateKey = val
+				iface.PrivateKey = l.value
 			case "listenport":
-				iface.ListenPort, _ = strconv.Atoi(val)
+				iface.ListenPort, _ = strconv.Atoi(l.value)
 			case "endpoint":
-				iface.Endpoint = val
-			}
-		} else if currentPeer != nil {
-			switch key {
-			case "publickey":
-				currentPeer.PublicKey = val
-			case "endpoint":
-				currentPeer.Endpoint = val
-			case "allowedips":
-				for _, ip := range strings.Split(val, ",") {
-					ip = strings.TrimSpace(ip)
-					if ip != "" {
-						currentPeer.AllowedIPs = append(currentPeer.AllowedIPs, ip)
-					}
-				}
-			case "presharedkey":
-				currentPeer.PresharedKey = val
-			case "persistentkeepalive":
-				currentPeer.PersistentKeepalive, _ = strconv.Atoi(val)
-			case "# name":
-				currentPeer.Name = val
-			case "# description":
-				currentPeer.Description = val
+				iface.Endpoint = l.value
 			}
 		}
 	}
 
-	if currentPeer != nil {
-		iface.Peers = append(iface.Peers, *currentPeer)
+	for _, p := range cfg.peers {
+		peer := models.WGPeer{AllowedIPs: []string{}}
+		for _, l := range p.lines {
+			if !l.isKV {
+				continue
+			}
+			switch l.key {
+			case "publickey":
+				peer.PublicKey = l.value
+			case "endpoint":
+				peer.Endpoint = l.value
+			case "allowedips":
+				for _, ip := range strings.Split(l.value, ",") {
+					ip = strings.TrimSpace(ip)
+					if ip != "" {
+						peer.AllowedIPs = append(peer.AllowedIPs, ip)
+					}
+				}
+			case "presharedkey":
+				peer.PresharedKey = l.value
+			case "persistentkeepalive":
+				peer.PersistentKeepalive, _ = strconv.Atoi(l.value)
+			case "# name":
+				peer.Name = l.value
+			case "# description":
+				peer.Description = l.value
+			}
+		}
+		iface.Peers = append(iface.Peers, peer)
 	}
 
 	return iface
