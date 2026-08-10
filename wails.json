@@ -1,0 +1,21 @@
+{
+  "name": "WireguardHub",
+  "outputfilename": "wireguardhub",
+  "frontend": {
+    "dir": "./frontend",
+    "install": "bun install",
+    "build": "bun run build",
+    "dev": "bun run dev",
+    "devServerUrl": "http://localhost:1420"
+  },
+  "author": {
+    "name": "eqto",
+    "email": ""
+  },
+  "info": {
+    "productName": "WireguardHub",
+    "productVersion": "0.1.0-rc.1",
+    "copyright": "Copyright (c) 2026 eqto",
+    "comments": "A visual interface for managing WireGuard VPN servers"
+  }
+}

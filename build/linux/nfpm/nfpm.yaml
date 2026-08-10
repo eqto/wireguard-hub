@@ -6,13 +6,13 @@
 name: "wireguardhub"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.0.1"
+version: "0.1.0-rc.1"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A program that does X"
-vendor: "My Company"
-homepage: "https://wails.io"
+description: "A visual interface for managing WireGuard VPN servers"
+vendor: "eqto"
+homepage: "https://github.com/eqto/wireguard-hub"
 license: "MIT"
 release: "1"
 

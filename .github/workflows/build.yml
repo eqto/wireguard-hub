@@ -1,0 +1,193 @@
+name: Build
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.0
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libjavascriptcoregtk-6.0-dev libsoup-3.0-dev libglib2.0-dev build-essential pkg-config
+      - name: Build frontend
+        run: |
+          cd frontend
+          bun install
+          bun run build
+      - name: Go vet
+        run: CGO_ENABLED=1 go vet ./...
+      - name: Go test
+        run: CGO_ENABLED=1 go test ./...
+      - name: Build app
+        run: CGO_ENABLED=1 go build -o /tmp/wireguardhub .
+
+  build-app:
+    name: Build App (${{ matrix.target }})
+    if: github.event_name == 'release'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            artifact: wireguardhub-linux-amd64
+            goarch: amd64
+            package: rpm
+          - os: ubuntu-latest
+            target: linux-amd64
+            artifact: wireguardhub-linux-amd64
+            goarch: amd64
+            package: deb
+          - os: windows-latest
+            target: windows-amd64
+            artifact: wireguardhub-windows-amd64.exe
+            goarch: amd64
+            package: msi
+          - os: windows-latest
+            target: windows-arm64
+            artifact: wireguardhub-windows-arm64.exe
+            goarch: arm64
+            package: none
+          - os: macos-latest
+            target: darwin-arm64
+            artifact: wireguardhub-darwin-arm64
+            goarch: arm64
+            package: dmg
+          - os: macos-13
+            target: darwin-amd64
+            artifact: wireguardhub-darwin-amd64
+            goarch: amd64
+            package: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.0
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libjavascriptcoregtk-6.0-dev libsoup-3.0-dev libglib2.0-dev build-essential pkg-config
+      - name: Build frontend
+        run: |
+          cd frontend
+          bun install
+          bun run build
+      - name: Build app
+        env:
+          CGO_ENABLED: "1"
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -o ${{ matrix.artifact }} .
+      - name: Package .rpm
+        if: matrix.package == 'rpm'
+        run: |
+          sudo gem install --no-document fpm
+          mkdir -p pkgroot/usr/local/bin pkgroot/usr/share/applications pkgroot/usr/share/icons/hicolor/128x128/apps
+          cp ${{ matrix.artifact }} pkgroot/usr/local/bin/wireguardhub
+          cp build/linux/desktop pkgroot/usr/share/applications/wireguardhub.desktop
+          cp build/icon.png pkgroot/usr/share/icons/hicolor/128x128/apps/wireguardhub.png
+          fpm -s dir -t rpm -n wireguardhub -v ${{ github.ref_name }} -p wireguardhub-${{ github.ref_name }}-1.x86_64.rpm \
+            --depends gtk4 --depends webkitgtk6.0 \
+            -C pkgroot usr/local/bin/wireguardhub usr/share/applications/wireguardhub.desktop usr/share/icons/hicolor/128x128/apps/wireguardhub.png
+      - name: Package .deb
+        if: matrix.package == 'deb'
+        run: |
+          sudo gem install --no-document fpm
+          mkdir -p pkgroot/usr/local/bin pkgroot/usr/share/applications pkgroot/usr/share/icons/hicolor/128x128/apps
+          cp ${{ matrix.artifact }} pkgroot/usr/local/bin/wireguardhub
+          cp build/linux/desktop pkgroot/usr/share/applications/wireguardhub.desktop
+          cp build/icon.png pkgroot/usr/share/icons/hicolor/128x128/apps/wireguardhub.png
+          fpm -s dir -t deb -n wireguardhub -v ${{ github.ref_name }} -p wireguardhub_${{ github.ref_name }}_amd64.deb \
+            --depends libgtk-4-1 --depends libwebkitgtk-6.0-4 \
+            -C pkgroot usr/local/bin/wireguardhub usr/share/applications/wireguardhub.desktop usr/share/icons/hicolor/128x128/apps/wireguardhub.png
+      - name: Package .dmg
+        if: matrix.package == 'dmg'
+        run: |
+          APPDIR="WireguardHub.app"
+          mkdir -p "$APPDIR/Contents/MacOS"
+          mkdir -p "$APPDIR/Contents/Resources"
+          cp ${{ matrix.artifact }} "$APPDIR/Contents/MacOS/wireguardhub"
+          cp build/darwin/Info.plist "$APPDIR/Contents/Info.plist"
+          cp build/darwin/icons.icns "$APPDIR/Contents/Resources/icons.icns"
+          chmod +x "$APPDIR/Contents/MacOS/wireguardhub"
+          hdiutil create -volname "WireguardHub" -srcfolder "$APPDIR" -fs APFS -format UDZO wireguardhub-${{ matrix.target }}.dmg
+      - name: Install NSIS
+        if: matrix.package == 'msi'
+        shell: bash
+        run: |
+          curl -L -o nsis.zip https://sourceforge.net/projects/nsis/files/NSIS%203/3.10/nsis-3.10.zip/download
+          7z x nsis.zip -o"C:\nsis" -y
+          echo "C:\nsis\nsis-3.10" >> "$GITHUB_PATH"
+      - name: Package .exe installer
+        if: matrix.package == 'msi'
+        shell: powershell
+        run: |
+          # Create output directory expected by NSIS script
+          New-Item -ItemType Directory -Force -Path "bin"
+          # Download WebView2 bootstrapper required by NSIS script (must be in script dir)
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "build/windows/nsis/MicrosoftEdgeWebview2Setup.exe" -MaximumRedirection 10
+          # Copy binary to script dir so NSIS File command can find it
+          Copy-Item ${{ matrix.artifact }} "build/windows/nsis/${{ matrix.artifact }}"
+          makensis "-DARG_WAILS_AMD64_BINARY=${{ matrix.artifact }}" "-DINFO_PROJECTNAME=wireguardhub" "-DINFO_COMPANYNAME=eqto" "-DINFO_PRODUCTNAME=WireguardHub" "-DINFO_PRODUCTVERSION=${{ github.ref_name }}" "-DINFO_COPYRIGHT=(c) 2026, eqto" build/windows/nsis/project.nsi
+          Move-Item "bin\wireguardhub-amd64-installer.exe" wireguardhub-windows-amd64-setup.exe -Force
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ matrix.artifact }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .rpm to release
+        if: matrix.package == 'rpm'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: wireguardhub-${{ github.ref_name }}-1.x86_64.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .deb to release
+        if: matrix.package == 'deb'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: wireguardhub_${{ github.ref_name }}_amd64.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .dmg to release
+        if: matrix.package == 'dmg'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: wireguardhub-${{ matrix.target }}.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload .exe installer to release
+        if: matrix.package == 'msi'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: wireguardhub-windows-amd64-setup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

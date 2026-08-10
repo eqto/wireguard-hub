@@ -5,26 +5,26 @@
 		<key>CFBundleExecutable</key>
 		<string>wireguardhub</string>
 		<key>CFBundleGetInfoString</key>
-		<string>Some Product Comments</string>
+		<string>WireguardHub - WireGuard VPN management</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>
-		<string>appicon</string>
+		<string>wireguardhub</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.mycompany.myproduct</string>
+		<string>io.github.eqto.wireguardhub</string>
 		<key>CFBundleName</key>
-		<string>My Product</string>
+		<string>WireguardHub</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
-		<string>0.0.1</string>
+		<string>0.1.0-rc.1</string>
 		<key>CFBundleVersion</key>
-		<string>0.0.1</string>
+		<string>0.1.0-rc.1</string>
 		<key>LSMinimumSystemVersion</key>
 		<string>12.0.0</string>
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>
 		<key>NSHumanReadableCopyright</key>
-		<string>(c) 2025, My Company</string>
+		<string>(c) 2026, eqto</string>
 	</dict>
 </plist>
